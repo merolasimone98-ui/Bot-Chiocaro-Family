@@ -44,14 +44,14 @@ ID_RUOLO_STAFF_CHIOCARO = 1569480368246235167
 ID_CANALE_ANNUNCI_CHIOCARO = 1569741365594816512
 ID_RUOLO_MEMBRO_CHIOCARO = 1569486576214478919
 
-# ID FAMIGLIA CATUOZZO
+# ID FAMIGLIA CATUOZZO (GIALLO)
 ID_CANALE_PANNELLO_CATUOZZO = 1569743489447501865
 ID_CANALE_STAFF_CATUOZZO = 1569743678648623216
 ID_RUOLO_STAFF_CATUOZZO = 1569481117055328447
 ID_CANALE_ANNUNCI_CATUOZZO = 1569743744306118666
 ID_RUOLO_MEMBRO_CATUOZZO = 1569486737649041408
 
-# ID FAMIGLIA LIFARDO
+# ID FAMIGLIA LIFARDO (VIOLA)
 ID_CANALE_PANNELLO_LIFARDO = 1569747038785245355
 ID_CANALE_STAFF_LIFARDO = 1569747072108986629
 ID_CANALE_ANNUNCI_LIFARDO = 1569747095173333002
@@ -328,7 +328,7 @@ class VistaRichiestaChiocaro(discord.ui.View):
         await interaction.response.send_modal(ModuloChiocaro())
 
 # ==========================================
-# 5. SISTEMA FAMIGLIA CATUOZZO
+# 5. SISTEMA FAMIGLIA CATUOZZO (GIALLO)
 # ==========================================
 class VistaStaffCatuozzo(discord.ui.View):
     def __init__(self, utente_id: int, conferma: str, motivo_ingresso: str, motivo_scelta: str):
@@ -452,7 +452,7 @@ class VistaRichiestaCatuozzo(discord.ui.View):
         await interaction.response.send_modal(ModuloCatuozzo())
 
 # ==========================================
-# 6. SISTEMA FAMIGLIA LIFARDO
+# 6. SISTEMA FAMIGLIA LIFARDO (VIOLA)
 # ==========================================
 class VistaStaffLifardo(discord.ui.View):
     def __init__(self, utente_id: int, conferma: str, motivo_ingresso: str, motivo_scelta: str):
@@ -472,7 +472,6 @@ class VistaStaffLifardo(discord.ui.View):
         guild = interaction.guild
         utente = guild.get_member(self.utente_id)
 
-        # Assegna il ruolo Lifardo all'utente accettato
         ruolo_membro = guild.get_role(ID_RUOLO_MEMBRO_LIFARDO)
         if utente and ruolo_membro:
             try:
@@ -485,7 +484,7 @@ class VistaStaffLifardo(discord.ui.View):
                 embed_dm = discord.Embed(
                     title="🎉 BENVENUTO NELLA FAMIGLIA LIFARDO!",
                     description="La tua richiesta di adesione è stata **approvata**!\nOra fai ufficialmente parte della **Famiglia Lifardo**.",
-                    color=discord.Color.gold()
+                    color=discord.Color.purple()
                 )
                 await utente.send(embed=embed_dm)
             except Exception:
@@ -496,7 +495,7 @@ class VistaStaffLifardo(discord.ui.View):
             embed_annuncio = discord.Embed(
                 title="🦅 NUOVO MEMBRO IN FAMIGLIA LIFARDO 🦅",
                 description=f"Diamo tutti il benvenuto a {utente.mention if utente else f'<@{self.utente_id}>'} che si è ufficialmente unito alla **Famiglia Lifardo**! ⚜️🦁",
-                color=discord.Color.gold()
+                color=discord.Color.purple()
             )
             if utente:
                 embed_annuncio.set_thumbnail(url=utente.avatar.url if utente.avatar else utente.default_avatar.url)
@@ -558,7 +557,7 @@ class ModuloLifardo(discord.ui.Modal, title="🦅 Candidatura Famiglia Lifardo")
                     f"💭 **Perché vuole entrare:**\n```{self.motivo_ingresso.value}```\n"
                     f"⭐ **Perché dovremmo scegliere lui/lei:**\n```{self.motivo_scelta.value}```"
                 ),
-                color=discord.Color.gold()
+                color=discord.Color.purple()
             )
             view = VistaStaffLifardo(
                 utente_id=interaction.user.id,
@@ -679,7 +678,7 @@ async def on_ready():
             embed_chiocaro.set_footer(text="Famiglia Chiocaro • Reclutamento Ufficiale")
             await canale_chiocaro.send(embed=embed_chiocaro, view=VistaRichiestaChiocaro())
 
-    # 4. PANNELLO FAMIGLIA CATUOZZO AUTOMATICO
+    # 4. PANNELLO FAMIGLIA CATUOZZO AUTOMATICO (GIALLO)
     canale_catuozzo = bot.get_channel(ID_CANALE_PANNELLO_CATUOZZO)
     if canale_catuozzo:
         async for msg in canale_catuozzo.history(limit=10):
@@ -694,7 +693,7 @@ async def on_ready():
             embed_catuozzo.set_footer(text="Famiglia Catuozzo • Reclutamento Ufficiale")
             await canale_catuozzo.send(embed=embed_catuozzo, view=VistaRichiestaCatuozzo())
 
-    # 5. PANNELLO FAMIGLIA LIFARDO AUTOMATICO
+    # 5. PANNELLO FAMIGLIA LIFARDO AUTOMATICO (VIOLA)
     canale_lifardo = bot.get_channel(ID_CANALE_PANNELLO_LIFARDO)
     if canale_lifardo:
         async for msg in canale_lifardo.history(limit=10):
@@ -704,7 +703,7 @@ async def on_ready():
             embed_lifardo = discord.Embed(
                 title="🦅 ── RECLUTAMENTO FAMIGLIA LIFARDO ── ⚜️",
                 description="Vuoi far parte della Famiglia Lifardo?\n\nClicca sul pulsante blu qui sotto per inviare la tua candidatura ufficiale alla dirigenza!",
-                color=discord.Color.gold()
+                color=discord.Color.purple()
             )
             embed_lifardo.set_footer(text="Famiglia Lifardo • Reclutamento Ufficiale")
             await canale_lifardo.send(embed=embed_lifardo, view=VistaRichiestaLifardo())
