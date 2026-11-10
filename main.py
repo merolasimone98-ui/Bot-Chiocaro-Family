@@ -31,19 +31,19 @@ ID_RUOLO_CITTADINO = 1569719339198845112
 ID_CANALE_RICHIESTA = 1569720582474571806
 ID_CANALE_STAFF = 1569720656541515866
 ID_CANALE_FORUM = 1569721095345405993
-ID_TAG_CITTADINANZA = 1569724498385571921  # <-- TAG FORUM CITTADINANZA
+ID_TAG_CITTADINANZA = 1569724498385571921
 
 # ==========================================
 # 3. GESTIONE PULSANTI STAFF (ACCETTA / RIFIUTA)
 # ==========================================
 class VistaStaffDecisione(discord.ui.View):
-    def __init__(self, utente_id: int, nome_ic: str, eta_ic: str, data_nascita: str, storia: str):
+    def __init__(self, utente_id: int, nome_ic: str, eta_ic: str, data_nascita: str, famiglia: str):
         super().__init__(timeout=None)
         self.utente_id = utente_id
         self.nome_ic = nome_ic
         self.eta_ic = eta_ic
         self.data_nascita = data_nascita
-        self.storia = storia
+        self.famiglia = famiglia
 
     @discord.ui.button(label="Accetta 🟢", style=discord.ButtonStyle.green, custom_id="staff_accetta")
     async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -62,7 +62,7 @@ class VistaStaffDecisione(discord.ui.View):
             except Exception as e:
                 print(f"Errore assegnazione ruolo: {e}")
 
-        # 2. Crea il post nel Forum e applica il Tag di Cittadinanza
+        # 2. Crea il post nel Forum con il formato "CITTADINANZA = utente" e applica il Tag
         canale_forum = guild.get_channel(ID_CANALE_FORUM)
         if canale_forum and isinstance(canale_forum, discord.ForumChannel):
             try:
@@ -72,23 +72,23 @@ class VistaStaffDecisione(discord.ui.View):
                         f"👤 **Nome e Cognome IC:** {self.nome_ic}\n"
                         f"📅 **Età IC:** {self.eta_ic}\n"
                         f"🎂 **Data di Nascita:** {self.data_nascita}\n"
-                        f"📖 **Background / Origine:** {self.storia}\n\n"
+                        f"🏠 **Famiglia:** {self.famiglia}\n\n"
                         f"🎮 **Utente Discord:** {f'<@{self.utente_id}>'}\n"
                         f"✅ **Approvato da:** {interaction.user.mention}"
                     ),
                     color=discord.Color.green()
                 )
                 
-                # Recupera l'oggetto tag tramite il suo ID
+                # Recupera l'oggetto tag tramite ID
                 tag_oggetti = []
                 for tag in canale_forum.available_tags:
                     if tag.id == ID_TAG_CITTADINANZA:
                         tag_oggetti.append(tag)
                         break
 
-                # Crea il thread nel forum applicando il tag (se trovato)
+                # Crea il thread nel forum con il titolo formattato richiesto
                 await canale_forum.create_thread(
-                    name=f"📄-{self.nome_ic}",
+                    name=f"CITTADINANZA = {self.nome_ic}",
                     embed=embed_forum,
                     applied_tags=tag_oggetti
                 )
@@ -113,7 +113,7 @@ class VistaStaffDecisione(discord.ui.View):
         # 4. Aggiorna il messaggio nello staff channel
         embed_modificato = interaction.message.embeds[0]
         embed_modificato.color = discord.Color.green()
-        embed_modificato.add_field(name="Stato Pratica", value=f"🟢 **Accettato e Registrato nel Forum con Tag** da {interaction.user.mention}", inline=False)
+        embed_modificato.add_field(name="Stato Pratica", value=f"🟢 **Accettato e Registrato nel Forum** da {interaction.user.mention}", inline=False)
 
         for child in self.children:
             child.disabled = True
@@ -157,7 +157,7 @@ class VistaStaffDecisione(discord.ui.View):
         await interaction.response.send_message("Richiesta rifiutata.", ephemeral=True)
 
 # ==========================================
-# 4. MODULO CON I CAMPI RICHIESTI
+# 4. MODULO AGGIORNATO CON IL CAMPO FAMIGLIA
 # ==========================================
 class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"):
     nome_ic = discord.ui.TextInput(
@@ -181,12 +181,11 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
         max_length=10
     )
 
-    storia = discord.ui.TextInput(
-        label="Origine / Storia in breve del personaggio",
-        placeholder="Descrivi brevemente chi è il tuo personaggio...",
-        style=discord.TextStyle.paragraph,
+    famiglia = discord.ui.TextInput(
+        label="A che famiglia appartieni?",
+        placeholder="Scrivi il nome della tua famiglia...",
         required=True,
-        max_length=500
+        max_length=100
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -206,8 +205,8 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
                     f"👤 **Utente Discord:** {interaction.user.mention} (`{interaction.user.id}`)\n\n"
                     f"📝 **Nome IC:** {self.nome_ic.value}\n"
                     f"📅 **Età IC:** {self.eta_ic.value}\n"
-                    f"🎂 **Data di Nascita:** {self.data_nascita.value}\n\n"
-                    f"📖 **Storia / Origini:**\n```{self.storia.value}```"
+                    f"🎂 **Data di Nascita:** {self.data_nascita.value}\n"
+                    f"🏠 **Famiglia:** {self.famiglia.value}"
                 ),
                 color=discord.Color.gold()
             )
@@ -218,7 +217,7 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
                 nome_ic=self.nome_ic.value,
                 eta_ic=self.eta_ic.value,
                 data_nascita=self.data_nascita.value,
-                storia=self.storia.value
+                famiglia=self.famiglia.value
             )
             await canale_staff.send(embed=embed_staff, view=view)
         else:
