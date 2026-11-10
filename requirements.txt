@@ -1,2 +1,3 @@
 discord.py
 flask
+PyNaCl>=1.5.0
