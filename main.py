@@ -26,51 +26,6 @@ def keep_alive():
 # ==========================================
 # 2. INIZIALIZZAZIONE BOT DISCORD & ID
 # ==========================================
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.voice_states = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-ID_CANALE_CONTO_BANCARIO = 1569833371176276070
-ID_RUOLO_STAFF = 1569773078097960960
-
-def get_db_connection():
-    # Connessione pulita con autocommit abilitato per evitare problemi di salvataggio
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require', connect_timeout=5)
-    conn.autocommit = True
-    return conn
-
-def get_or_create_user_account(user_id):
-    """Legge o crea l'account garantendo dati sempre sincronizzati con Supabase."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT cash, bank, account_open FROM economy WHERE user_id = %s", (user_id,))
-        row = cur.fetchone()
-        
-        if not row:
-            cur.execute(
-                "INSERT INTO economy (user_id, cash, bank, account_open) VALUES (%s, %s, %s, %s)",
-                (user_id, 1500.0, 0.0, True)
-            )
-            cash, bank, account_open = 1500.0, 0.0, True
-        else:
-            cash, bank, account_open = float(row[0]), float(row[1]), row[2]
-            if not account_open:
-                cur.execute("UPDATE economy SET account_open = TRUE WHERE user_id = %s", (user_id,))
-                account_open = True
-                
-        return {"cash": cash, "bank": bank, "open": account_open}
-    except Exception as e:
-        print(f"Errore database: {e}")
-        return {"cash": 1500.0, "bank": 0.0, "open": True}
-    finally:
-        cur.close()
-        conn.close()
-
 
 ID_RUOLO_PORTO_DARMI = 1569836896312631356
 ID_RUOLO_STAFF = 1569794230262693889
@@ -127,6 +82,51 @@ ID_CANALE_STAFF_LIFARDO = 1569747072108986629
 ID_CANALE_ANNUNCI_LIFARDO = 1569747095173333002
 ID_RUOLO_STAFF_LIFARDO = 1569496579218341958
 ID_RUOLO_MEMBRO_LIFARDO = 1569496594892595210
+
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+intents.voice_states = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+ID_CANALE_CONTO_BANCARIO = 1569833371176276070
+ID_RUOLO_STAFF = 1569773078097960960
+
+def get_db_connection():
+    # Connessione pulita con autocommit abilitato per evitare problemi di salvataggio
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require', connect_timeout=5)
+    conn.autocommit = True
+    return conn
+
+def get_or_create_user_account(user_id):
+    """Legge o crea l'account garantendo dati sempre sincronizzati con Supabase."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT cash, bank, account_open FROM economy WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        
+        if not row:
+            cur.execute(
+                "INSERT INTO economy (user_id, cash, bank, account_open) VALUES (%s, %s, %s, %s)",
+                (user_id, 1500.0, 0.0, True)
+            )
+            cash, bank, account_open = 1500.0, 0.0, True
+        else:
+            cash, bank, account_open = float(row[0]), float(row[1]), row[2]
+            if not account_open:
+                cur.execute("UPDATE economy SET account_open = TRUE WHERE user_id = %s", (user_id,))
+                account_open = True
+                
+        return {"cash": cash, "bank": bank, "open": account_open}
+    except Exception as e:
+        print(f"Errore database: {e}")
+        return {"cash": 1500.0, "bank": 0.0, "open": True}
+    finally:
+        cur.close()
+        conn.close()
 
 def save_user_balances(user_id, cash, bank):
     """Scrive i nuovi saldi direttamente su Supabase."""
@@ -335,7 +335,6 @@ async def rimuovi_soldi(interaction: discord.Interaction, destinatario: discord.
         
     save_user_balances(destinatario.id, acc["cash"], acc["bank"])
     await interaction.followup.send(f>✅ Rimossi **€{importo:,.2f}** ({conto}) a {destinatario.mention}.", ephemeral=True)
-
 # ==========================================
 # 3. SISTEMA CITTADINANZA
 # ==========================================
