@@ -236,7 +236,7 @@ class VistaStaffChiocaro(discord.ui.View):
                 embed_dm = discord.Embed(
                     title="🎉 BENVENUTO NELLA FAMIGLIA CHIOCARO!",
                     description="La tua richiesta di adesione è stata **approvata**!\nOra fai ufficialmente parte della **Famiglia Chiocaro**.",
-                    color=discord.Color.gold()
+                    color=discord.Color.from_rgb(255, 100, 100)
                 )
                 await utente.send(embed=embed_dm)
             except Exception:
@@ -247,7 +247,7 @@ class VistaStaffChiocaro(discord.ui.View):
             embed_annuncio = discord.Embed(
                 title="🔥 NUOVO MEMBRO IN FAMIGLIA CHIOCARO 🔥",
                 description=f"Diamo tutti il benvenuto a {utente.mention if utente else f'<@{self.utente_id}>'} che si è ufficialmente unito alla **Famiglia Chiocaro**! 🐔👑",
-                color=discord.Color.gold()
+                color=discord.Color.from_rgb(255, 100, 100)
             )
             if utente:
                 embed_annuncio.set_thumbnail(url=utente.avatar.url if utente.avatar else utente.default_avatar.url)
@@ -309,7 +309,7 @@ class ModuloChiocaro(discord.ui.Modal, title="🐔 Candidatura Famiglia Chiocaro
                     f"💭 **Perché vuole entrare:**\n```{self.motivo_ingresso.value}```\n"
                     f"⭐ **Perché dovremmo scegliere lui/lei:**\n```{self.motivo_scelta.value}```"
                 ),
-                color=discord.Color.gold()
+                color=discord.Color.from_rgb(255, 100, 100)
             )
             view = VistaStaffChiocaro(
                 utente_id=interaction.user.id,
@@ -663,7 +663,7 @@ async def on_ready():
             )
             await canale_cittadinanza.send(embed=embed_cittadinanza, view=VistaCittadinanza())
 
-    # 3. PANNELLO FAMIGLIA CHIOCARO AUTOMATICO
+    # 3. PANNELLO FAMIGLIA CHIOCARO AUTOMATICO (ROSSO CHIARO)
     canale_chiocaro = bot.get_channel(ID_CANALE_PANNELLO_CHIOCARO)
     if canale_chiocaro:
         async for msg in canale_chiocaro.history(limit=10):
@@ -673,7 +673,7 @@ async def on_ready():
             embed_chiocaro = discord.Embed(
                 title="🐔 ── RECLUTAMENTO FAMIGLIA CHIOCARO ── 👑",
                 description="Vuoi far parte della Famiglia Chiocaro?\n\nClicca sul pulsante blu qui sotto per inviare la tua candidatura ufficiale alla dirigenza!",
-                color=discord.Color.gold()
+                color=discord.Color.from_rgb(255, 100, 100)
             )
             embed_chiocaro.set_footer(text="Famiglia Chiocaro • Reclutamento Ufficiale")
             await canale_chiocaro.send(embed=embed_chiocaro, view=VistaRichiestaChiocaro())
