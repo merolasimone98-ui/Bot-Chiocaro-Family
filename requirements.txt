@@ -1,3 +1,4 @@
 discord.py[voice]
 flask
 aiohttp
+psycopg2-binary
