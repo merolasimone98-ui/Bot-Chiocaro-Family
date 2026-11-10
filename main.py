@@ -32,17 +32,24 @@ def keep_alive():
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ID CITTADINANZA & GENERALI
 ID_CANALE_REGOLAMENTO = 1569483884465225861
 ID_RUOLO_CITTADINO = 1569719339198845112
 ID_CANALE_RICHIESTA = 1569720582474571806
 ID_CANALE_STAFF = 1569720656541515866
 ID_CANALE_FORUM = 1569721095345405993
 ID_TAG_CITTADINANZA = 1569724498385571921
-ID_RUOLO_AUTORIZZATO_TUMORE = 1569737774733721650  # <-- RUOLO PERMESSO COMANDO TUMORE
+ID_RUOLO_AUTORIZZATO_TUMORE = 1569737774733721650
+
+# ID FAMIGLIA CHIOCARO
+ID_CANALE_PANNELLO_CHIOCARO = 1569740451861504060
+ID_CANALE_STAFF_CHIOCARO = 1569740933061156955
+ID_RUOLO_STAFF_CHIOCARO = 1569480368246235167
+ID_CANALE_ANNUNCI_CHIOCARO = 1569741365594816512
 
 
 # ==========================================
-# 3. GESTIONE PULSANTI STAFF (ACCETTA / RIFIUTA)
+# 3. SISTEMA CITTADINANZA (STAFF & MODULO)
 # ==========================================
 class VistaStaffDecisione(discord.ui.View):
 
@@ -79,14 +86,12 @@ class VistaStaffDecisione(discord.ui.View):
     utente = guild.get_member(self.utente_id)
     ruolo = guild.get_role(ID_RUOLO_CITTADINO)
 
-    # 1. Assegna il ruolo all'utente
     if utente and ruolo:
       try:
         await utente.add_roles(ruolo)
       except Exception as e:
         print(f"Errore assegnazione ruolo: {e}")
 
-    # 2. Crea il post nel Forum con il formato "CITTADINANZA = utente" e applica il Tag
     canale_forum = guild.get_channel(ID_CANALE_FORUM)
     if canale_forum and isinstance(canale_forum, discord.ForumChannel):
       try:
@@ -101,24 +106,19 @@ class VistaStaffDecisione(discord.ui.View):
             ),
             color=discord.Color.green(),
         )
-
-        # Recupera l'oggetto tag tramite ID
-        tag_oggetti = []
-        for tag in canale_forum.available_tags:
-          if tag.id == ID_TAG_CITTADINANZA:
-            tag_oggetti.append(tag)
-            break
-
-        # Crea il thread nel forum con il titolo formattato
+        tag_oggetti = [
+            tag
+            for tag in canale_forum.available_tags
+            if tag.id == ID_TAG_CITTADINANZA
+        ]
         await canale_forum.create_thread(
             name=f"CITTADINANZA = {self.nome_ic}",
             embed=embed_forum,
             applied_tags=tag_oggetti,
         )
       except Exception as e:
-        print(f"Errore creazione post nel forum o applicazione tag: {e}")
+        print(f"Errore creazione post nel forum: {e}")
 
-    # 3. Invia DM di conferma all'utente
     if utente:
       try:
         embed_dm = discord.Embed(
@@ -135,7 +135,6 @@ class VistaStaffDecisione(discord.ui.View):
       except Exception:
         pass
 
-    # 4. Aggiorna il messaggio nello staff channel
     embed_modificato = interaction.message.embeds[0]
     embed_modificato.color = discord.Color.green()
     embed_modificato.add_field(
@@ -146,14 +145,12 @@ class VistaStaffDecisione(discord.ui.View):
         ),
         inline=False,
     )
-
     for child in self.children:
       child.disabled = True
 
     await interaction.message.edit(embed=embed_modificato, view=self)
     await interaction.response.send_message(
-        "Richiesta accettata, post creato nel forum e tag applicato!",
-        ephemeral=True,
+        "Richiesta accettata con successo!", ephemeral=True
     )
 
   @discord.ui.button(
@@ -172,16 +169,13 @@ class VistaStaffDecisione(discord.ui.View):
 
     guild = interaction.guild
     utente = guild.get_member(self.utente_id)
-
-    # Invia DM di rifiuto all'utente
     if utente:
       try:
         embed_dm = discord.Embed(
             title="❌ CITTADINANZA RIFIUTATA",
             description=(
                 "I tuoi documenti per la cittadinanza sono stati"
-                " **rifiutati** dallo staff.\n\nRileggi le regole o contatta"
-                " uno staffer prima di riprovare a compilare il modulo."
+                " **rifiutati** dallo staff."
             ),
             color=discord.Color.red(),
         )
@@ -189,7 +183,6 @@ class VistaStaffDecisione(discord.ui.View):
       except Exception:
         pass
 
-    # Aggiorna il messaggio dello staff
     embed_modificato = interaction.message.embeds[0]
     embed_modificato.color = discord.Color.red()
     embed_modificato.add_field(
@@ -197,7 +190,6 @@ class VistaStaffDecisione(discord.ui.View):
         value=f"🔴 **Rifiutato** da {interaction.user.mention}",
         inline=False,
     )
-
     for child in self.children:
       child.disabled = True
 
@@ -207,9 +199,6 @@ class VistaStaffDecisione(discord.ui.View):
     )
 
 
-# ==========================================
-# 4. MODULO & VISTA REGISTRAZIONE UTENTE
-# ==========================================
 class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"):
   nome_ic = discord.ui.TextInput(
       label="Nome e Cognome (In Game)",
@@ -217,21 +206,18 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
       required=True,
       max_length=50,
   )
-
   eta_ic = discord.ui.TextInput(
       label="Età del Personaggio",
       placeholder="Es. 25",
       required=True,
       max_length=3,
   )
-
   data_nascita = discord.ui.TextInput(
       label="Data di Nascita IC",
       placeholder="Es. 15/04/1999",
       required=True,
       max_length=10,
   )
-
   famiglia = discord.ui.TextInput(
       label="A che famiglia appartieni?",
       placeholder="Scrivi il nome della tua famiglia...",
@@ -242,14 +228,10 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
   async def on_submit(self, interaction: discord.Interaction):
     await interaction.response.send_message(
         "✅ **Richiesta inviata all'Ufficio Immigrazione!** Lo staff valuterà i"
-        " tuoi documenti prima dell'approvazione.",
+        " tuoi documenti.",
         ephemeral=True,
     )
-
-    guild = interaction.guild
-
-    # Invio della richiesta nel canale STAFF
-    canale_staff = guild.get_channel(ID_CANALE_STAFF)
+    canale_staff = interaction.guild.get_channel(ID_CANALE_STAFF)
     if canale_staff:
       embed_staff = discord.Embed(
           title="📥 Nuova Richiesta di Cittadinanza da Revisionare",
@@ -262,10 +244,6 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
           ),
           color=discord.Color.gold(),
       )
-      embed_staff.set_footer(
-          text="Valuta la richiesta prima che venga inviata nel Forum."
-      )
-
       view = VistaStaffDecisione(
           utente_id=interaction.user.id,
           nome_ic=self.nome_ic.value,
@@ -274,11 +252,6 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
           famiglia=self.famiglia.value,
       )
       await canale_staff.send(embed=embed_staff, view=view)
-    else:
-      print(
-          "❌ ERRORE: Impossibile trovare il canale staff con ID"
-          f" {ID_CANALE_STAFF}"
-      )
 
 
 class VistaCittadinanza(discord.ui.View):
@@ -295,22 +268,229 @@ class VistaCittadinanza(discord.ui.View):
       self, interaction: discord.Interaction, button: discord.ui.Button
   ):
     ruolo_cittadino = interaction.guild.get_role(ID_RUOLO_CITTADINO)
-
-    # Controllo se l'utente possiede già il ruolo cittadino
     if ruolo_cittadino and ruolo_cittadino in interaction.user.roles:
       await interaction.response.send_message(
-          "❌ **Possiedi già la cittadinanza!** Non puoi compilare nuovamente"
-          " il modulo.",
-          ephemeral=True,
+          "❌ **Possiedi già la cittadinanza!**", ephemeral=True
       )
       return
-
-    # Se non lo possiede, apre il modale
     await interaction.response.send_modal(ModuloCittadinanza())
 
 
 # ==========================================
-# 5. EVENTI DI AVVIO & COMANDO /tumore
+# 4. SISTEMA FAMIGLIA CHIOCARO
+# ==========================================
+class VistaStaffChiocaro(discord.ui.View):
+
+  def __init__(
+      self,
+      utente_id: int,
+      conferma: str,
+      motivo_ingresso: str,
+      motivo_scelta: str,
+  ):
+    super().__init__(timeout=None)
+    self.utente_id = utente_id
+    self.conferma = conferma
+    self.motivo_ingresso = motivo_ingresso
+    self.motivo_scelta = motivo_scelta
+
+  @discord.ui.button(
+      label="Accetta 🟢",
+      style=discord.ButtonStyle.green,
+      custom_id="staff_chiocaro_accetta",
+  )
+  async def accetta(
+      self, interaction: discord.Interaction, button: discord.ui.Button
+  ):
+    ruolo_autorizzato = interaction.guild.get_role(ID_RUOLO_STAFF_CHIOCARO)
+
+    # Controllo che solo chi ha il ruolo specifico possa cliccare
+    if (
+        not ruolo_autorizzato
+        or ruolo_autorizzato not in interaction.user.roles
+    ):
+      await interaction.response.send_message(
+          "❌ Non hai il ruolo autorizzato per gestire le richieste della"
+          " Famiglia Chiocaro.",
+          ephemeral=True,
+      )
+      return
+
+    guild = interaction.guild
+    utente = guild.get_member(self.utente_id)
+
+    # 1. Invia DM all'utente accettato
+    if utente:
+      try:
+        embed_dm = discord.Embed(
+            title="🎉 BENVENUTO NELLA FAMIGLIA CHIOCARO!",
+            description=(
+                "La tua richiesta di adesione è stata **approvata**!\n"
+                "Ora fai ufficialmente parte della **Famiglia Chiocaro**."
+            ),
+            color=discord.Color.gold(),
+        )
+        await utente.send(embed=embed_dm)
+      except Exception:
+        pass
+
+    # 2. Invia Embed di Annuncio nel Canale dedicato
+    canale_annunci = guild.get_channel(ID_CANALE_ANNUNCI_CHIOCARO)
+    if canale_annunci:
+      embed_annuncio = discord.Embed(
+          title="🔥 NUOVO MEMBRO IN FAMIGLIA CHIOCARO 🔥",
+          description=(
+              f"Diamo tutti il benvenuto a {utente.mention if utente else f'<@{self.utente_id}>'} "
+              "che si è ufficialmente unito alla **Famiglia Chiocaro**! 🐔👑"
+          ),
+          color=discord.Color.gold(),
+      )
+      if utente:
+        embed_annuncio.set_thumbnail(
+            url=utente.avatar.url if utente.avatar else utente.default_avatar.url
+        )
+      await canale_annunci.send(embed=embed_annuncio)
+
+    # 3. Modifica il messaggio dello staff
+    embed_modificato = interaction.message.embeds[0]
+    embed_modificato.color = discord.Color.green()
+    embed_modificato.add_field(
+        name="Stato Pratica",
+        value=f"🟢 **Accettato** da {interaction.user.mention}",
+        inline=False,
+    )
+    for child in self.children:
+      child.disabled = True
+
+    await interaction.message.edit(embed=embed_modificato, view=self)
+    await interaction.response.send_message(
+        "Candidatura accettata e annuncio inviato!", ephemeral=True
+    )
+
+  @discord.ui.button(
+      label="Rifiuta 🔴",
+      style=discord.ButtonStyle.red,
+      custom_id="staff_chiocaro_rifiuta",
+  )
+  async def rifiuta(
+      self, interaction: discord.Interaction, button: discord.ui.Button
+  ):
+    ruolo_autorizzato = interaction.guild.get_role(ID_RUOLO_STAFF_CHIOCARO)
+
+    if (
+        not ruolo_autorizzato
+        or ruolo_autorizzato not in interaction.user.roles
+    ):
+      await interaction.response.send_message(
+          "❌ Non hai il ruolo autorizzato per gestire le richieste della"
+          " Famiglia Chiocaro.",
+          ephemeral=True,
+      )
+      return
+
+    guild = interaction.guild
+    utente = guild.get_member(self.utente_id)
+
+    # DM di Rifiuto
+    if utente:
+      try:
+        embed_dm = discord.Embed(
+            title="❌ RICHIESTA CHIOCARO RIFIUTATA",
+            description=(
+                "La tua candidatura per entrare nella **Famiglia Chiocaro** è"
+                " stata **respinta**."
+            ),
+            color=discord.Color.red(),
+        )
+        await utente.send(embed=embed_dm)
+      except Exception:
+        pass
+
+    embed_modificato = interaction.message.embeds[0]
+    embed_modificato.color = discord.Color.red()
+    embed_modificato.add_field(
+        name="Stato Pratica",
+        value=f"🔴 **Rifiutato** da {interaction.user.mention}",
+        inline=False,
+    )
+    for child in self.children:
+      child.disabled = True
+
+    await interaction.message.edit(embed=embed_modificato, view=self)
+    await interaction.response.send_message(
+        "Candidatura rifiutata.", ephemeral=True
+    )
+
+
+class ModuloChiocaro(
+    discord.ui.Modal, title="🐔 Candidatura Famiglia Chiocaro"
+):
+  conferma = discord.ui.TextInput(
+      label="Sei sicuro di voler entrare?",
+      style=discord.TextStyle.short,
+      required=True,
+      max_length=50,
+  )
+  motivo_ingresso = discord.ui.TextInput(
+      label="Perché vuoi entrare?",
+      style=discord.TextStyle.paragraph,
+      required=True,
+      max_length=300,
+  )
+  motivo_scelta = discord.ui.TextInput(
+      label="Perché dovremmo scegliere te?",
+      style=discord.TextStyle.paragraph,
+      required=True,
+      max_length=300,
+  )
+
+  async def on_submit(self, interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "✅ **Candidatura inviata con successo!** La dirigenza della Famiglia"
+        " Chiocaro valuterà la tua richiesta.",
+        ephemeral=True,
+    )
+
+    canale_staff = interaction.guild.get_channel(ID_CANALE_STAFF_CHIOCARO)
+    if canale_staff:
+      embed_staff = discord.Embed(
+          title="📥 Nuova Candidatura - Famiglia Chiocaro",
+          description=(
+              f"👤 **Candidato:** {interaction.user.mention}"
+              f" (`{interaction.user.id}`)\n\n❓ **Conferma di voler"
+              f" entrare:**\n```{self.conferma.value}```\n💭 **Perché vuole"
+              f" entrare:**\n```{self.motivo_ingresso.value}```\n⭐ **Perché"
+              f" dovremmo scegliere lui/lei:**\n```{self.motivo_scelta.value}```"
+          ),
+          color=discord.Color.gold(),
+      )
+      view = VistaStaffChiocaro(
+          utente_id=interaction.user.id,
+          conferma=self.conferma.value,
+          motivo_ingresso=self.motivo_ingresso.value,
+          motivo_scelta=self.motivo_scelta.value,
+      )
+      await canale_staff.send(embed=embed_staff, view=view)
+
+
+class VistaRichiestaChiocaro(discord.ui.View):
+
+  def __init__(self):
+    super().__init__(timeout=None)
+
+  @discord.ui.button(
+      label="Entra nella Famiglia Chiocaro 🐔",
+      style=discord.ButtonStyle.blurple,
+      custom_id="btn_richiesta_chiocaro_perm",
+  )
+  async def apri_modulo(
+      self, interaction: discord.Interaction, button: discord.ui.Button
+  ):
+    await interaction.response.send_modal(ModuloChiocaro())
+
+
+# ==========================================
+# 5. COMANDO /tumore
 # ==========================================
 @bot.tree.command(
     name="tumore",
@@ -320,7 +500,6 @@ class VistaCittadinanza(discord.ui.View):
     membro="Il membro a cui vuoi assegnare la notizia (opzionale)"
 )
 async def tumore(interaction: discord.Interaction, membro: discord.Member = None):
-  # Controllo se l'utente ha il ruolo autorizzato
   ruolo_autorizzato = interaction.guild.get_role(ID_RUOLO_AUTORIZZATO_TUMORE)
   if ruolo_autorizzato not in interaction.user.roles:
     await interaction.response.send_message(
@@ -328,16 +507,13 @@ async def tumore(interaction: discord.Interaction, membro: discord.Member = None
     )
     return
 
-  # Se non viene taggato nessuno, sceglie casualmente un membro del server
   if membro is None:
     membro = random.choice(interaction.guild.members)
 
-  # Prende l'avatar (foto profilo) dell'utente scelto
   avatar_url = (
       membro.avatar.url if membro.avatar else membro.default_avatar.url
   )
 
-  # Crea il messaggio embed con la notizia e la foto
   embed = discord.Embed(
       title="⚠️ COMUNICATO UFFICIALE ⚠️",
       description=(
@@ -349,29 +525,29 @@ async def tumore(interaction: discord.Interaction, membro: discord.Member = None
   embed.set_image(url=avatar_url)
   embed.set_footer(text="Riposa in pace... 🪦")
 
-  # Invia il messaggio nel canale
   await interaction.response.send_message(embed=embed)
 
 
+# ==========================================
+# 6. EVENTI DI AVVIO (ON_READY)
+# ==========================================
 @bot.event
 async def on_ready():
   print(f"🔥 Bot online come: {bot.user.name} ({bot.user.id})")
 
   bot.add_view(VistaCittadinanza())
+  bot.add_view(VistaRichiestaChiocaro())
 
-  # Sincronizzazione immediata sui server
+  # Sincronizzazione comandi
   for guild in bot.guilds:
     try:
       bot.tree.copy_global_to(guild=guild)
       await bot.tree.sync(guild=guild)
-      print(
-          "✅ Comandi sincronizzati istantaneamente per il server:"
-          f" {guild.name}"
-      )
+      print(f"✅ Sync per: {guild.name}")
     except Exception as e:
-      print(f"❌ Errore sync per {guild.name}: {e}")
+      print(f"❌ Errore sync {guild.name}: {e}")
 
-  # Invio automatico del REGOLAMENTO
+  # 1. REGOLAMENTO AUTOMATICO
   canale_regole = bot.get_channel(ID_CANALE_REGOLAMENTO)
   if canale_regole:
     async for msg in canale_regole.history(limit=10):
@@ -388,74 +564,62 @@ async def on_ready():
               " pisello.*\n\n"
               "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
               "### 🤝 1. RISPETTO TRA LE FAMIGLIE\n"
-              "*(e niente guerre civili gratis)*\n"
-              "📌 **Ogni famiglia ha il suo blocco e i suoi spazi.**\n"
-              "💬 Potete sfottervi quanto volete, ma se si esagera con le"
-              " offese pesanti o si rompono i coglioni fuori dai canali"
-              " appositi, partono i provvedimenti. **La guerra si fa coi meme,"
-              " non facendo i ritardati mentali.**\n\n"
-              "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+              "📌 **Ogni famiglia ha il suo blocco e i suoi spazi.**\n\n"
               "### 🤫 2. MENO PIPPE MENTALI E CHIUDETE QUELLA FOGNA\n"
-              "📌 **A nessuno frega un cazzo dei vostri drammi personali.**\n"
-              "💬 Se avete problemi o crisi isteriche, andate a piangere da"
-              " vostra madre. Qua dentro si viene per cazzeggiare, giocare e"
-              " postare ignoranza.\n\n"
-              "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+              "📌 **A nessuno frega un cazzo dei vostri drammi personali.**\n\n"
               "### 🚫 3. NIENTE SPAM O PORCHERIE IN GIRO\n"
-              "📌 **Non intasate le chat generali con link di merda, spam o"
-              " pubblicità non autorizzate.**\n"
-              "👢 Chi rompe i maroni fuori posto viene defenestrato a calci in"
-              " culo.\n\n"
-              "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+              "📌 **Non intasate le chat generali con link di merda.**\n\n"
               "### 🤡 4. CHI NON RIDE È UN PEZZO DI MERDA PATENTATO\n"
-              "📌 **Se qualcuno manda un meme cringe o fa una battuta pessima,"
-              " si ride per pietà, brutti stronzi.**\n"
-              "🏷️ Chi fa il fighetto e rovina l'atmosfera viene marchiato a"
-              " fuoco come infame.\n\n"
-              "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
+              "📌 **Se qualcuno manda un meme cringe, si ride per pietà.**"
           ),
           color=discord.Color.from_rgb(255, 69, 0),
       )
-      embed_regole.set_footer(
-          text=(
-              "Firmato: La superiorità di tutte le Famiglie. O le rispettate, o"
-              " vi mandiamo a raccogliere pomodori marci con le orecchie."
-              " 🤌🚜💨"
-          )
-      )
       await canale_regole.send(embed=embed_regole)
 
-  # Invio automatico del PANNELLO CITTADINANZA
+  # 2. PANNELLO CITTADINANZA AUTOMATICO
   canale_cittadinanza = bot.get_channel(ID_CANALE_RICHIESTA)
   if canale_cittadinanza:
     async for msg in canale_cittadinanza.history(limit=10):
       if msg.author == bot.user:
-        print("ℹ️ Pannello cittadinanza già presente.")
         break
     else:
       embed_cittadinanza = discord.Embed(
           title="🪪 ── UFFICIO ANAGRAFE E CITTADINANZA ── 🏛️",
           description=(
-              "Benvenuto nell'ufficio immigrazione e registrazione delle"
-              " Famiglie.\n\nPer registrarti ufficialmente, ottenere i tuoi"
-              " documenti ed accedere a tutti i canali della città, clicca sul"
-              " pulsante verde qui sotto e compila la tua scheda personaggio!\n\n⚠️"
-              " *Inserisci dati coerenti per velocizzare l'approvazione dello"
-              " staff.*"
+              "Benvenuto nell'ufficio immigrazione.\nClicca sul pulsante per"
+              " compilare la tua scheda personaggio!"
           ),
           color=discord.Color.blue(),
-      )
-      embed_cittadinanza.set_footer(
-          text="Sistema di Registrazione Automatica • Chiocaro Bot 🤌"
       )
       await canale_cittadinanza.send(
           embed=embed_cittadinanza, view=VistaCittadinanza()
       )
-      print("✅ Pannello cittadinanza inviato!")
+
+  # 3. PANNELLO FAMIGLIA CHIOCARO AUTOMATICO
+  canale_chiocaro = bot.get_channel(ID_CANALE_PANNELLO_CHIOCARO)
+  if canale_chiocaro:
+    async for msg in canale_chiocaro.history(limit=10):
+      if msg.author == bot.user:
+        break
+    else:
+      embed_chiocaro = discord.Embed(
+          title="🐔 ── RECLUTAMENTO FAMIGLIA CHIOCARO ── 👑",
+          description=(
+              "Vuoi far parte della Famiglia Chiocaro?\n\n"
+              "Clicca sul pulsante blu qui sotto per inviare la tua"
+              " candidatura ufficiale alla dirigenza!"
+          ),
+          color=discord.Color.gold(),
+      )
+      embed_chiocaro.set_footer(text="Famiglia Chiocaro • Reclutamento Ufficiale")
+      await canale_chiocaro.send(
+          embed=embed_chiocaro, view=VistaRichiestaChiocaro()
+      )
+      print("✅ Pannello Chiocaro inviato in automatico!")
 
 
 # ==========================================
-# 6. AVVIO APPLICAZIONE
+# 7. AVVIO APPLICAZIONE
 # ==========================================
 keep_alive()
 
