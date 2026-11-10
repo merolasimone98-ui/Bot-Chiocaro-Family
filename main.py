@@ -21,7 +21,7 @@ def keep_alive():
     thread.start()
 
 # ==========================================
-# 2. INIZIALIZZAZIONE BOT DISCORD & ID CORRETTI
+# 2. INIZIALIZZAZIONE BOT DISCORD & ID
 # ==========================================
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -29,8 +29,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 ID_CANALE_REGOLAMENTO = 1569483884465225861
 ID_RUOLO_CITTADINO = 1569719339198845112
 ID_CANALE_RICHIESTA = 1569720582474571806
-ID_CANALE_STAFF = 1569720656541515866  # <-- ID CORRETTO AGGIORNATO
+ID_CANALE_STAFF = 1569720656541515866
 ID_CANALE_FORUM = 1569721095345405993
+ID_TAG_CITTADINANZA = 1569724498385571921  # <-- TAG FORUM CITTADINANZA
 
 # ==========================================
 # 3. GESTIONE PULSANTI STAFF (ACCETTA / RIFIUTA)
@@ -61,7 +62,7 @@ class VistaStaffDecisione(discord.ui.View):
             except Exception as e:
                 print(f"Errore assegnazione ruolo: {e}")
 
-        # 2. Crea il post nel Forum dopo l'approvazione
+        # 2. Crea il post nel Forum e applica il Tag di Cittadinanza
         canale_forum = guild.get_channel(ID_CANALE_FORUM)
         if canale_forum and isinstance(canale_forum, discord.ForumChannel):
             try:
@@ -77,12 +78,22 @@ class VistaStaffDecisione(discord.ui.View):
                     ),
                     color=discord.Color.green()
                 )
+                
+                # Recupera l'oggetto tag tramite il suo ID
+                tag_oggetti = []
+                for tag in canale_forum.available_tags:
+                    if tag.id == ID_TAG_CITTADINANZA:
+                        tag_oggetti.append(tag)
+                        break
+
+                # Crea il thread nel forum applicando il tag (se trovato)
                 await canale_forum.create_thread(
                     name=f"📄-{self.nome_ic}",
-                    embed=embed_forum
+                    embed=embed_forum,
+                    applied_tags=tag_oggetti
                 )
             except Exception as e:
-                print(f"Errore creazione post nel forum: {e}")
+                print(f"Errore creazione post nel forum o applicazione tag: {e}")
 
         # 3. Invia DM di conferma all'utente
         if utente:
@@ -102,13 +113,13 @@ class VistaStaffDecisione(discord.ui.View):
         # 4. Aggiorna il messaggio nello staff channel
         embed_modificato = interaction.message.embeds[0]
         embed_modificato.color = discord.Color.green()
-        embed_modificato.add_field(name="Stato Pratica", value=f"🟢 **Accettato e Registrato nel Forum** da {interaction.user.mention}", inline=False)
+        embed_modificato.add_field(name="Stato Pratica", value=f"🟢 **Accettato e Registrato nel Forum con Tag** da {interaction.user.mention}", inline=False)
 
         for child in self.children:
             child.disabled = True
 
         await interaction.message.edit(embed=embed_modificato, view=self)
-        await interaction.response.send_message("Richiesta accettata e inserita nel forum!", ephemeral=True)
+        await interaction.response.send_message("Richiesta accettata, post creato nel forum e tag applicato!", ephemeral=True)
 
     @discord.ui.button(label="Rifiuta 🔴", style=discord.ButtonStyle.red, custom_id="staff_rifiuta")
     async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -186,7 +197,7 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
 
         guild = interaction.guild
 
-        # Invio della richiesta nel canale STAFF corretto
+        # Invio della richiesta nel canale STAFF
         canale_staff = guild.get_channel(ID_CANALE_STAFF)
         if canale_staff:
             embed_staff = discord.Embed(
