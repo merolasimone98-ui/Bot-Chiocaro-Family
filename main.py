@@ -38,6 +38,7 @@ ID_CANALE_RICHIESTA = 1569720582474571806
 ID_CANALE_STAFF = 1569720656541515866
 ID_CANALE_FORUM = 1569721095345405993
 ID_TAG_CITTADINANZA = 1569724498385571921
+ID_RUOLO_AUTORIZZATO_TUMORE = 1569737774733721650  # <-- RUOLO PERMESSO COMANDO TUMORE
 
 
 # ==========================================
@@ -319,6 +320,14 @@ class VistaCittadinanza(discord.ui.View):
     membro="Il membro a cui vuoi assegnare la notizia (opzionale)"
 )
 async def tumore(interaction: discord.Interaction, membro: discord.Member = None):
+  # Controllo se l'utente ha il ruolo autorizzato
+  ruolo_autorizzato = interaction.guild.get_role(ID_RUOLO_AUTORIZZATO_TUMORE)
+  if ruolo_autorizzato not in interaction.user.roles:
+    await interaction.response.send_message(
+        "❌ Non hai i permessi per usare questo comando.", ephemeral=True
+    )
+    return
+
   # Se non viene taggato nessuno, sceglie casualmente un membro del server
   if membro is None:
     membro = random.choice(interaction.guild.members)
@@ -350,12 +359,15 @@ async def on_ready():
 
   bot.add_view(VistaCittadinanza())
 
-  # ── FORZA LA SINCRONIZZAZIONE IMMEDIATA SUL SERVER CORRENTE ──
+  # Sincronizzazione immediata sui server
   for guild in bot.guilds:
     try:
       bot.tree.copy_global_to(guild=guild)
       await bot.tree.sync(guild=guild)
-      print(f"✅ Comandi sincronizzati istantaneamente per il server: {guild.name}")
+      print(
+          "✅ Comandi sincronizzati istantaneamente per il server:"
+          f" {guild.name}"
+      )
     except Exception as e:
       print(f"❌ Errore sync per {guild.name}: {e}")
 
