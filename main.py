@@ -333,12 +333,12 @@ async def tumore(interaction: discord.Interaction, membro: discord.Member = None
       title="⚠️ COMUNICATO UFFICIALE ⚠️",
       description=(
           f"Si informa tutto il server che {membro.mention} ha contratto una"
-          " grave malattia: **il tumore**, e a breve purtroppo morirà. 棺"
+          " grave malattia: **il tumore**, e a breve purtroppo morirà. 🪦"
       ),
       color=discord.Color.dark_red(),
   )
   embed.set_image(url=avatar_url)
-  embed.set_footer(text="Riposa in pace... 棺")
+  embed.set_footer(text="Riposa in pace... 🪦")
 
   # Invia il messaggio nel canale
   await interaction.response.send_message(embed=embed)
@@ -350,11 +350,14 @@ async def on_ready():
 
   bot.add_view(VistaCittadinanza())
 
-  try:
-    synced = await bot.tree.sync()
-    print(f"✅ Sincronizzati {len(synced)} comandi slash!")
-  except Exception as e:
-    print(f"❌ Errore sincronizzazione comandi: {e}")
+  # ── FORZA LA SINCRONIZZAZIONE IMMEDIATA SUL SERVER CORRENTE ──
+  for guild in bot.guilds:
+    try:
+      bot.tree.copy_global_to(guild=guild)
+      await bot.tree.sync(guild=guild)
+      print(f"✅ Comandi sincronizzati istantaneamente per il server: {guild.name}")
+    except Exception as e:
+      print(f"❌ Errore sync per {guild.name}: {e}")
 
   # Invio automatico del REGOLAMENTO
   canale_regole = bot.get_channel(ID_CANALE_REGOLAMENTO)
@@ -423,7 +426,7 @@ async def on_ready():
           description=(
               "Benvenuto nell'ufficio immigrazione e registrazione delle"
               " Famiglie.\n\nPer registrarti ufficialmente, ottenere i tuoi"
-              " documentos ed accedere a tutti i canali della città, clicca sul"
+              " documenti ed accedere a tutti i canali della città, clicca sul"
               " pulsante verde qui sotto e compila la tua scheda personaggio!\n\n⚠️"
               " *Inserisci dati coerenti per velocizzare l'approvazione dello"
               " staff.*"
