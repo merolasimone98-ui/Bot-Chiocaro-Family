@@ -802,10 +802,28 @@ async def on_ready():
             print("✅ Tutti i pannelli e gli embed sono stati aggiornati con testi ricchi e dettagliati!")
 
 # ==========================================
-# COMANDI VOCALI (ENTRA & ESCI)
+# CONTROLLO PERMESSO RUOLO
+# ==========================================
+def solo_ruolo_autorizzato():
+    async def predicate(interaction: discord.Interaction):
+        # L'ID del ruolo richiesto
+        ID_RUOLO_NECESSARIO = 1569773078097960960
+        
+        # Controlla se l'utente ha il ruolo cercando tra i suoi ruoli nel server
+        ha_ruolo = any(role.id == ID_RUOLO_NECESSARIO for role in interaction.user.roles)
+        
+        if not ha_ruolo:
+            await interaction.response.send_message("❌ **Non hai i permessi necessari** per usare questo comando!", ephemeral=True)
+            return False
+        return True
+    return app_commands.check(predicate)
+
+# ==========================================
+# COMANDI VOCALI CON RESTRIZIONE DI RUOLO
 # ==========================================
 
 @bot.tree.command(name="vocale", description="Fa entrare il bot nel canale vocale predefinito")
+@solo_ruolo_autorizzato()
 async def vocale(interaction: discord.Interaction):
     guild = interaction.guild
     canale_vocale = guild.get_channel(ID_CANALE_VOCALE_DESTINAZIONE)
@@ -814,7 +832,6 @@ async def vocale(interaction: discord.Interaction):
         await interaction.response.send_message("❌ **Errore:** Canale vocale non trovato o ID non valido.", ephemeral=True)
         return
 
-    # Controlla se il bot è già connesso a una chat vocale nel server
     voice_client = guild.voice_client
 
     try:
@@ -831,6 +848,7 @@ async def vocale(interaction: discord.Interaction):
         await interaction.response.send_message(f"❌ Impossibile connettersi al canale vocale: `{e}`", ephemeral=True)
 
 @bot.tree.command(name="esci", description="Disconnette il bot dal canale vocale")
+@solo_ruolo_autorizzato()
 async def esci(interaction: discord.Interaction):
     guild = interaction.guild
     voice_client = guild.voice_client
@@ -840,6 +858,7 @@ async def esci(interaction: discord.Interaction):
         await interaction.response.send_message("🔇 **Bot disconnesso dal canale vocale.**", ephemeral=True)
     else:
         await interaction.response.send_message("❌ Il bot non è attualmente connesso a nessun canale vocale.", ephemeral=True)
+
 
 # ==========================================
 # 9. AVVIO APPLICAZIONE
