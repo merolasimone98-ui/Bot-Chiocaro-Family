@@ -36,6 +36,7 @@ ID_CANALE_STAFF = 1569720656541515866
 ID_CANALE_FORUM = 1569721095345405993
 ID_TAG_CITTADINANZA = 1569724498385571921
 ID_RUOLO_AUTORIZZATO_TUMORE = 1569737774733721650
+ID_CANALE_VOCALE_DESTINAZIONE = 1569502181080432731
 
 # ID FAMIGLIA CHIOCARO
 ID_CANALE_PANNELLO_CHIOCARO = 1569740451861504060
@@ -799,6 +800,46 @@ async def on_ready():
             embed_lifardo.set_footer(text="Famiglia Lifardo • Eleganza e Potere 🦅")
             await canale_lifardo.send(embed=embed_lifardo, view=VistaRichiestaLifardo())
             print("✅ Tutti i pannelli e gli embed sono stati aggiornati con testi ricchi e dettagliati!")
+
+# ==========================================
+# COMANDI VOCALI (ENTRA & ESCI)
+# ==========================================
+
+@bot.tree.command(name="vocale", description="Fa entrare il bot nel canale vocale predefinito")
+async def vocale(interaction: discord.Interaction):
+    guild = interaction.guild
+    canale_vocale = guild.get_channel(ID_CANALE_VOCALE_DESTINAZIONE)
+
+    if not canale_vocale or not isinstance(canale_vocale, discord.VoiceChannel):
+        await interaction.response.send_message("❌ **Errore:** Canale vocale non trovato o ID non valido.", ephemeral=True)
+        return
+
+    # Controlla se il bot è già connesso a una chat vocale nel server
+    voice_client = guild.voice_client
+
+    try:
+        if voice_client is not None:
+            if voice_client.channel.id == ID_CANALE_VOCALE_DESTINAZIONE:
+                await interaction.response.send_message("🔊 Il bot si trova già in questo canale vocale!", ephemeral=True)
+                return
+            await voice_client.move_to(canale_vocale)
+        else:
+            await canale_vocale.connect()
+
+        await interaction.response.send_message(f"🔊 **Bot connesso con successo al canale vocale:** {canale_vocale.mention}!", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Impossibile connettersi al canale vocale: `{e}`", ephemeral=True)
+
+@bot.tree.command(name="esci", description="Disconnette il bot dal canale vocale")
+async def esci(interaction: discord.Interaction):
+    guild = interaction.guild
+    voice_client = guild.voice_client
+
+    if voice_client is not None:
+        await voice_client.disconnect()
+        await interaction.response.send_message("🔇 **Bot disconnesso dal canale vocale.**", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Il bot non è attualmente connesso a nessun canale vocale.", ephemeral=True)
 
 # ==========================================
 # 9. AVVIO APPLICAZIONE
