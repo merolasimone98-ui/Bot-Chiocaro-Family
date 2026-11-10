@@ -1,2 +1,3 @@
 discord.py[voice]
 flask
+aiohttp>=3.9,<4.0
