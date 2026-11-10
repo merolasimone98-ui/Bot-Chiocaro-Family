@@ -28,6 +28,32 @@ def keep_alive():
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+
+ID_RUOLO_PORTO_DARMI = 1569836896312631356
+ID_RUOLO_STAFF = 1569794230262693889
+ID_RUOLO_ASSICURATO = 1569837091351699456
+ID_RUOLO_FDO = 1569792506722525285
+ID_RUOLO_VVF = 1569837191637499904
+ID_RUOLO_CRI = 1569837248252481738
+
+ID_RUOLO_PATENTI = {
+    'patente_a': 1569837307433984141,
+    'patente_b': 1569837330829672509,
+    'patente_c': 1569837358138916915,
+    'patente_d': 1569837367651733574
+}
+
+ID_FORUM_IMMATRICOLAZIONI = 1569837669905727660
+
+ID_CANALE_COMANDO_RECENSIONI = 1569837763459555440  # Sostituisci con l'ID del canale recensioni
+ID_CANALE_LOG_RECENSIONI = 1569838024596922619     # Canale Forum Recensioni
+LINK_IMMAGINE_RECENSIONE = "https://media.discordapp.net/attachments/1569724333704749107/1569838608347828304/Gemini_Generated_Image_jr98vmjr98vmjr98.jpg?ex=6af4e9a2&is=6af39822&hm=c9feb0602fe27105147d1f140d1ee0613abc4d8ba668d5f1880b684761e15503&=&format=webp"
+
+ID_CANALE_REGISTRO_ARRESTI = 1569838174342221825
+ID_CANALE_REGISTRO_MULTE = 1569838254247641128
+ID_CANALE_CONTO_BANCARIO = 1569833371176276070
+ID_CANALE_LOG_DOCUMENTI = 1569721095345405993  # Canale Accettazione / Log Documenti
+ID_FORUM_DOCUMENTI = 1562891782415450183 
 # ID CITTADINANZA & GENERALI
 ID_CANALE_REGOLAMENTO = 1569483884465225861
 ID_RUOLO_CITTADINO = 1569719339198845112
@@ -58,6 +84,2193 @@ ID_CANALE_STAFF_LIFARDO = 1569747072108986629
 ID_CANALE_ANNUNCI_LIFARDO = 1569747095173333002
 ID_RUOLO_STAFF_LIFARDO = 1569496579218341958
 ID_RUOLO_MEMBRO_LIFARDO = 1569496594892595210
+
+# ==========================================
+# 💾 GESTIONE PERSISTENZA DATI (JSON)
+# ==========================================
+DATA_FILE = "staff_data.json"
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {"users": {}, "economy": {}, "duty": {}, "rp_names": {}}
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Errore lettura {DATA_FILE}: {e}")
+        return {"users": {}, "economy": {}, "duty": {}, "rp_names": {}}
+
+def save_data(data):
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Errore salvataggio {DATA_FILE}: {e}")
+
+def get_user_eco(user_id_str):
+    data = load_data()
+    if "economy" not in data:
+        data["economy"] = {}
+    if user_id_str not in data["economy"]:
+        data["economy"][user_id_str] = {"bank": 0, "cash": 0, "has_account": False}
+        save_data(data)
+    return data["economy"][user_id_str]
+
+def update_user_eco(user_id_str, eco_data):
+    data = load_data()
+    if "economy" not in data:
+        data["economy"] = {}
+    data["economy"][user_id_str] = eco_data
+    save_data(data)
+
+def get_user_duty(user_id_str):
+    data = load_data()
+    if "duty" not in data:
+        data["duty"] = {}
+    if user_id_str not in data["duty"]:
+        data["duty"][user_id_str] = {"total_seconds": 0, "last_start": None, "on_duty": False}
+        save_data(data)
+    return data["duty"][user_id_str]
+
+def update_user_duty(user_id_str, duty_data):
+    data = load_data()
+    if "duty" not in data:
+        data["duty"] = {}
+    data["duty"][user_id_str] = duty_data
+    save_data(data)
+
+# ==========================================
+# ❄️ MODULO: PANNELLO DOCUMENTI (CON APPROVAZIONE STAFF)
+# ==========================================
+ID_CANALE_ACCETTAZIONE_STAFF = 1562891209675116544 
+
+# ==========================================
+# 🔘 VISTA APPROVAZIONE DOCUMENTI (PERSISTENTE)
+# ==========================================
+# ==========================================
+# 🔘 VISTA APPROVAZIONE DOCUMENTI (DINAMICA & CORRETTA)
+# ==========================================
+class Documenti(discord.ui.View):
+    def __init__(self, user_id: int, nome_rp: str, roblox_user: str, tipo_doc: str = "Cittadinanza"):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+        self.nome_rp = nome_rp
+        self.roblox_user = roblox_user  # Usato come Modello + Targa se tipo_doc == "Assicurazione"
+        self.tipo_doc = tipo_doc
+
+    @discord.ui.button(label="Accetta Documento", style=discord.ButtonStyle.success, custom_id="btn_accetta_documento")
+    async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+
+        try:
+            data = load_data()
+            user_id_str = str(self.user_id)
+            licenze_data = data.setdefault("licenze_cittadini", {})
+            user_lic = licenze_data.setdefault(user_id_str, {
+                "patente_a": False, "patente_b": False, "patente_c": False, "patente_d": False,
+                "porto_darmi": False, "cittadinanza": True, "assicurazione": False
+            })
+
+            tipo_upper = self.tipo_doc.upper()
+            emoji_doc = "📄"
+            ruolo_da_assegnare = None
+
+# --- GESTIONE DEI VARI TIPI DI DOCUMENTI ---
+            if "CITTADINANZA" in tipo_upper or "CITTADINO" in tipo_upper:
+                user_lic["cittadinanza"] = True
+                emoji_doc = "🇮🇹"
+                ruolo_da_assegnare = interaction.guild.get_role(ID_RUOLO_CITTADINO)
+
+            elif "PORTO" in tipo_upper or "ARMI" in tipo_upper:
+                user_lic["porto_darmi"] = True
+                emoji_doc = "🔫"
+                ruolo_da_assegnare = interaction.guild.get_role(ID_RUOLO_PORTO_DARMI)
+
+            elif "ASSICURAZIONE" in tipo_upper:
+                # 1. Controlla e scala i € 500
+                eco = get_user_eco(user_id_str)
+                cash = eco.get("cash", 0)
+                bank = eco.get("bank", 0)
+
+                if cash >= 500:
+                    eco["cash"] -= 500
+                elif bank >= 500:
+                    eco["bank"] -= 500
+                else:
+                    await interaction.followup.send(
+                        f"❌ **Impossibile approvare:** L'utente non ha € 500. Possiede € {cash:,} in contanti e € {bank:,} in banca.",
+                        ephemeral=True
+                    )
+                    return
+
+                update_user_eco(user_id_str, eco)
+
+                # 2. Salva lo stato nei dati locali
+                user_lic["assicurazione"] = True
+                emoji_doc = "🛡️"
+                if ID_RUOLO_ASSICURATO != 0:
+                    ruolo_da_assegnare = interaction.guild.get_role(ID_RUOLO_ASSICURATO)
+
+            # --- GESTIONE PATENTI ---
+            chiave_patente = tipo_upper.lower().strip().replace(" ", "_")
+            if "patente" in chiave_patente or chiave_patente in ["a", "b", "c", "d"]:
+                if chiave_patente in ["a", "b", "c", "d"]:
+                    chiave_patente = f"patente_{chiave_patente}"
+
+                role_id = ID_RUOLO_PATENTI.get(chiave_patente)
+                if not role_id:
+                    for k in ID_RUOLO_PATENTI:
+                        if k in chiave_patente or chiave_patente in k:
+                            role_id = ID_RUOLO_PATENTI[k]
+                            break
+
+                if role_id:
+                    ruolo_da_assegnare = interaction.guild.get_role(role_id)
+
+            save_data(data)
+            # Recuperiamo l'utente dal server
+            member = interaction.guild.get_member(self.user_id)
+            if not member:
+                try:
+                    member = await interaction.guild.fetch_member(self.user_id)
+                except Exception:
+                    member = None
+
+            # 1. Assegna il ruolo Discord all'utente
+            ruolo_assegnato = False
+            if member and ruolo_da_assegnare:
+                try:
+                    await member.add_roles(ruolo_da_assegnare, reason=f"Documento approvato: {self.tipo_doc}")
+                    ruolo_assegnato = True
+                except Exception:
+                    pass
+
+            # 2. Invia il messaggio in DM all'utente
+            dm_inviato = False
+            if member:
+                if "ASSICURAZIONE" in tipo_upper:
+                    embed_dm = discord.Embed(
+                        title="🛡️ ASSICURAZIONE APPROVATA",
+                        description=(
+                            f"Ciao {member.mention}, la tua richiesta di assicurazione per il veicolo "
+                            f"**{self.roblox_user}** è stata **APPROVATA** dallo Staff!\n\n"
+                            f"💸 **Costo addebitato:** `€ 500`\n"
+                            f"🎗️ Ti è stato assegnato il ruolo di assicurato."
+                        ),
+                        color=discord.Color.green(),
+                        timestamp=discord.utils.utcnow()
+                    )
+                else:
+                    embed_dm = discord.Embed(
+                        title=f"✅ {emoji_doc} DOCUMENTO APPROVATO",
+                        description=(
+                            f"Ciao {member.mention}, la tua richiesta per **{self.tipo_doc}** è stata **APPROVATA**!\n\n"
+                            f"🎗️ Ti è stato assegnato il rispettivo ruolo nel server."
+                        ),
+                        color=discord.Color.green(),
+                        timestamp=discord.utils.utcnow()
+                    )
+
+                try:
+                    await member.send(embed=embed_dm)
+                    dm_inviato = True
+                except Exception:
+                    dm_inviato = False
+
+            # 3. Aggiorna l'embed nel canale Accettazione Documenti
+            embed = interaction.message.embeds[0]
+            embed.color = discord.Color.green()
+            embed.title = f"✅ RICHIESTA APPROVATA: {self.tipo_doc.upper()}"
+            embed.set_footer(text=f"Approvato da {interaction.user.display_name}")
+
+            # Disabilita i pulsanti
+            for child in self.children:
+                child.disabled = True
+            await interaction.message.edit(embed=embed, view=self)
+
+            # Conferma visibile allo staff
+            await interaction.followup.send(
+                f"✅ **Documento approvato con successo!**\n"
+                f"🎗️ Ruolo assegnato: `{'SÌ ✅' if ruolo_assegnato else 'NO ❌ (Controlla gerarchia ruoli)'}`\n"
+                f"📩 DM inviato: `{'SÌ ✅' if dm_inviato else 'NO ❌ (L’utente ha i DM chiusi)'}`",
+                ephemeral=True
+            )
+
+            # 📥 CREA IL POST AUTOMATICO NEL FORUM DOCUMENTI CITTADINI
+            forum_channel = interaction.guild.get_channel(ID_FORUM_DOCUMENTI)
+            if forum_channel and isinstance(forum_channel, discord.ForumChannel):
+                if "ASSICURAZIONE" in tipo_upper:
+                    embed_forum = discord.Embed(
+                        title=f"🛡️ ASSICURAZIONE VEICOLO — {self.nome_rp}",
+                        description=(
+                            f"👤 **Intestatario:** {member.mention if member else 'Utente'}\n"
+                            f"📜 **Nome RP:** `{self.nome_rp}`\n"
+                            f"🚗 **Veicolo & Targa:** `{self.roblox_user}`\n"
+                            f"💳 **Stato Polizza:** `ATTIVA ✅`\n"
+                            f"💰 **Importo Saldato:** `€ 500`"
+                        ),
+                        color=discord.Color.blue(),
+                        timestamp=discord.utils.utcnow()
+                    )
+                    nome_thread = f"🛡️ ASSICURAZIONE | {self.nome_rp} ({self.roblox_user})"
+                else:
+                    embed_forum = discord.Embed(
+                        title=f"📄 {emoji_doc} DOCUMENTO ({self.tipo_doc}) — {self.nome_rp}",
+                        description=(
+                            f"👤 **Cittadino:** {member.mention if member else 'Utente'}\n"
+                            f"📜 **Nome RP:** `{self.nome_rp}`\n"
+                            f"🎮 **Account Roblox:** `{self.roblox_user}`\n"
+                            f"📌 **Tipo Documento:** `{self.tipo_doc}`\n\n"
+                            f"📌 *Documento ufficiale registrato nel sistema di Puglia RP.*"
+                        ),
+                        color=discord.Color.green(),
+                        timestamp=discord.utils.utcnow()
+                    )
+                    nome_thread = f"{emoji_doc} {self.tipo_doc.upper()} | {self.nome_rp} ({self.roblox_user})"
+
+                try:
+                    await forum_channel.create_thread(
+                        name=nome_thread,
+                        embed=embed_forum
+                    )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            await interaction.followup.send(f"❌ Errore durante l'approvazione: `{e}`", ephemeral=True)
+
+    @discord.ui.button(label="Rifiuta Documento", style=discord.ButtonStyle.danger, custom_id="btn_rifiuta_documento")
+    async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+
+        try:
+            member = interaction.guild.get_member(self.user_id)
+            if not member:
+                try:
+                    member = await interaction.guild.fetch_member(self.user_id)
+                except Exception:
+                    member = None
+
+            # Invia il DM di rifiuto all'utente
+            dm_inviato = False
+            if member:
+                tipo_upper = self.tipo_doc.upper()
+                if "ASSICURAZIONE" in tipo_upper:
+                    embed_dm = discord.Embed(
+                        title="❌ ASSICURAZIONE RIFIUTATA",
+                        description=(
+                            f"Ciao {member.mention}, la tua richiesta di assicurazione per **{self.roblox_user}** è stata **RIFIUTATA** dallo Staff.\n\n"
+                            f"⏳ Devi avere minimo 500 euro per fare l'assicurazione al veicolo, prova a fare /portafoglio per vedere il tuo saldo."
+                        ),
+                        color=discord.Color.red(),
+                        timestamp=discord.utils.utcnow()
+                    )
+                else:
+                    embed_dm = discord.Embed(
+                        title="❌ DOCUMENTO RIFIUTATO",
+                        description=f"Ciao {member.mention}, la tua richiesta per **{self.tipo_doc}** è stata **RIFIUTATA** dallo Staff.",
+                        color=discord.Color.red(),
+                        timestamp=discord.utils.utcnow()
+                    )
+
+                try:
+                    await member.send(embed=embed_dm)
+                    dm_inviato = True
+                except Exception:
+                    dm_inviato = False
+
+            # Aggiorna il messaggio nel canale log dello staff
+            embed = interaction.message.embeds[0]
+            embed.color = discord.Color.red()
+            embed.title = f"❌ RICHIESTA RIFIUTATA: {self.tipo_doc.upper()}"
+            embed.set_footer(text=f"Rifiutato da {interaction.user.display_name}")
+
+            for child in self.children:
+                child.disabled = True
+            await interaction.message.edit(embed=embed, view=self)
+
+            await interaction.followup.send(
+                f"❌ **Richiesta rifiutata con successo!**\n"
+                f"📩 DM inviato all'utente: `{'SÌ ✅' if dm_inviato else 'NO ❌ (ha i DM chiusi)'}`",
+                ephemeral=True
+            )
+
+        except Exception as e:
+            await interaction.followup.send(f"❌ Errore durante il rifiuto: `{e}`", ephemeral=True)
+            
+# ==========================================
+# 📝 MODALE RICHIESTA CITTADINANZA
+# ==========================================
+# ==========================================
+# 🇮🇹 MODALE RICHIESTA CITTADINANZA
+# ==========================================
+class ModalCittadinanza(discord.ui.Modal, title="🇮🇹 Richiesta Cittadinanza Puglia RP"):
+    nome_rp = discord.ui.TextInput(
+        label="👤 Nome e Cognome RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    roblox_user = discord.ui.TextInput(
+        label="🎮 Nome Utente Roblox",
+        placeholder="Es. Player123",
+        required=True,
+        max_length=50
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        # 1. Recupera il canale dei log/accettazione
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
+        if not canale_log:
+            await interaction.followup.send(
+                "❌ **Errore:** Il canale di approvazione documenti non è configurato correttamente! Avvisa un Amministratore.", 
+                ephemeral=True
+            )
+            return
+
+        # 2. Embed inviato allo Staff nel canale di accettazione
+        embed_richiesta = discord.Embed(
+            title="🇮🇹 RICHIESTA DOCUMENTO: CITTADINANZA",
+            description=(
+                f"👤 **Cittadino:** {interaction.user.mention} (`{interaction.user.id}`)\n"
+                f"📜 **Nome RP:** `{self.nome_rp.value.strip()}`\n"
+                f"🎮 **Account Roblox:** `{self.roblox_user.value.strip()}`\n\n"
+                f"⏳ *In attesa di approvazione o rifiuto da parte dello Staff.*"
+            ),
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+        embed_richiesta.set_footer(text="Puglia RP • In attesa di valutazione")
+
+        # 3. Collega i pulsanti della vista Documenti
+        view = Documenti(
+            user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value.strip(),
+            roblox_user=self.roblox_user.value.strip(),
+            tipo_doc="Cittadinanza"
+        )
+
+        try:
+            # 4. Invio nel canale staff
+            await canale_log.send(embed=embed_richiesta, view=view)
+            await interaction.followup.send(
+                "✅ **Richiesta inviata con successo!** È stata inoltrata allo Staff per la valutazione.", 
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Impossibile inviare la richiesta nel canale staff. Errore permessi: `{e}`", 
+                ephemeral=True
+            )
+
+
+# --- Modale Patente (Ordinata e Senza Roblox) ---
+# ==========================================
+# 🚗 MODALE RICHIESTA PATENTI (A, B, C, D)
+# ==========================================
+# ==========================================
+# 🚗 MODALE RICHIESTA PATENTE
+# ==========================================
+class ModalPatente(discord.ui.Modal, title="🚗 Richiesta Patente Puglia RP"):
+    nome_rp = discord.ui.TextInput(
+        label="👤 Nome e Cognome RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    roblox_user = discord.ui.TextInput(
+        label="🎮 Nome Utente Roblox",
+        placeholder="Es. Player123",
+        required=True,
+        max_length=50
+    )
+    tipo_patente = discord.ui.TextInput(
+        label="🪪 Tipo di Patente (A, B, C, D)",
+        placeholder="Es. B",
+        required=True,
+        max_length=20
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        # 1. Recupera il canale dei log/accettazione dello staff
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
+        if not canale_log:
+            await interaction.followup.send(
+                "❌ **Errore:** Il canale di approvazione documenti non è configurato correttamente! Avvisa un Amministratore.", 
+                ephemeral=True
+            )
+            return
+
+        # 2. Crea l'embed da mandare allo Staff nel canale di accettazione
+        embed_richiesta = discord.Embed(
+            title=f"🚗 RICHIESTA DOCUMENTO: {self.tipo_patente.value.strip().upper()}",
+            description=(
+                f"👤 **Cittadino:** {interaction.user.mention} (`{interaction.user.id}`)\n"
+                f"📜 **Nome RP:** `{self.nome_rp.value.strip()}`\n"
+                f"🪪 **Tipo Richiesto:** `{self.tipo_patente.value.strip()}`\n"
+                f"🎮 **Account Roblox:** `{self.roblox_user.value.strip()}`\n\n"
+                f"⏳ *In attesa di approvazione o rifiuto da parte dello Staff.*"
+            ),
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+        embed_richiesta.set_footer(text="Puglia RP • In attesa di valutazione")
+
+        # 3. Collega i pulsanti della vista Documenti passando il tipo esatto (es. "Patente B")
+        view = Documenti(
+            user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value.strip(),
+            roblox_user=self.roblox_user.value.strip(),
+            tipo_doc=self.tipo_patente.value.strip()  # Importante per far riconoscere se è A, B, C o D
+        )
+
+        try:
+            # 4. Invia nel canale staff con i bottoni Accetta/Rifiuta
+            await canale_log.send(embed=embed_richiesta, view=view)
+            await interaction.followup.send(
+                "✅ **Richiesta di patente inviata con successo!** È stata inoltrata allo Staff per la valutazione.", 
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Impossibile inviare la richiesta nel canale staff. Errore: `{e}`", 
+                ephemeral=True
+            )
+            await interaction.followup.send(f"❌ Errore nell'invio della richiesta nel canale: `{e}`", ephemeral=True)
+
+
+# ==========================================
+# 🔫 MODALE PORTO D'ARMI (CON MODELLO ARMA)
+# ==========================================
+# ==========================================
+# 🔫 MODALE RICHIESTA PORTO D'ARMI (IN ATTESA)
+# ==========================================
+class ModalPortoDArmi(discord.ui.Modal, title="🔫 Richiesta Porto d'Armi Puglia RP"):
+    nome_rp = discord.ui.TextInput(
+        label="👤 Nome e Cognome RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    roblox_user = discord.ui.TextInput(
+        label="🎮 Account Roblox",
+        placeholder="Es. Player123",
+        required=True,
+        max_length=50
+    )
+    modello_arma = discord.ui.TextInput(
+        label="🔫 Modello Arma Richiesta",
+        placeholder="Es. Glock-17, Beretta 92FS...",
+        required=True,
+        max_length=50
+    )
+    motivazione = discord.ui.TextInput(
+        label="📝 Motivazione Richiesta",
+        style=discord.TextStyle.paragraph,
+        placeholder="Inserisci la motivazione...",
+        required=True,
+        max_length=300
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        # 1. Recupera il canale dei log/accettazione dello staff
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
+        if not canale_log:
+            await interaction.followup.send(
+                "❌ **Errore:** Canale di approvazione documenti non trovato! Avvisa uno staffer.", 
+                ephemeral=True
+            )
+            return
+
+        # 2. Crea l'embed da mandare allo Staff nel canale di accettazione
+        embed_richiesta = discord.Embed(
+            title="🔫 RICHIESTA DOCUMENTO: PORTO D'ARMI",
+            description=(
+                f"👤 **Cittadino:** {interaction.user.mention} (`{interaction.user.id}`)\n"
+                f"📜 **Nome RP:** `{self.nome_rp.value.strip()}`\n"
+                f"🎮 **Account Roblox:** `{self.roblox_user.value.strip()}`\n"
+                f"🔫 **Modello Arma:** `{self.modello_arma.value.strip()}`\n"
+                f"📝 **Motivazione:** `{self.motivazione.value.strip()}`\n\n"
+                f"⏳ *In attesa di approvazione o rifiuto da parte dello Staff.*"
+            ),
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+        embed_richiesta.set_footer(text="Puglia RP • In attesa di valutazione")
+
+        # 3. Collega la vista 'Documenti' (passiamo il modello arma nel campo roblox_user o in una variabile comoda per il forum)
+        # Nota: Passiamo il modello dell'arma così il bot lo userà per creare il thread nel forum quando lo staff accetterà
+        view = Documenti(
+            user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value.strip(),
+            roblox_user=f"{self.roblox_user.value.strip()} | Arma: {self.modello_arma.value.strip()}",
+            tipo_doc="Porto d'Armi"
+        )
+
+        try:
+            # 4. Invia la richiesta nel canale staff con i bottoni Accetta / Rifiuta
+            await canale_log.send(embed=embed_richiesta, view=view)
+            
+            # 5. Messaggio di conferma inviato in privato all'utente
+            await interaction.followup.send(
+                "✅ **Richiesta di Porto d'Armi inviata con successo!** È stata inoltrata allo Staff per la valutazione.", 
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Impossibile inviare la richiesta nel canale staff. Errore: `{e}`", 
+                ephemeral=True
+            )
+            
+
+# ==========================================
+# 🛡️ MODALE RICHIESTA ASSICURAZIONE (COMPLETO)
+# ==========================================
+class ModalAssicurazione(discord.ui.Modal, title="🛡️ Stipula Assicurazione Veicolo"):
+    nome_rp = discord.ui.TextInput(
+        label="👤 Nome e Cognome RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    modello_veicolo = discord.ui.TextInput(
+        label="🚗 Modello Veicolo",
+        placeholder="Es. Volksburg Marin",
+        required=True,
+        max_length=40
+    )
+    targa = discord.ui.TextInput(
+        label="🔢 Targa Veicolo",
+        placeholder="Es. AB/BC/10",
+        required=True,
+        max_length=20
+    )
+    patente = discord.ui.TextInput(
+        label="🪪 Tipo di Patente",
+        placeholder="Es. A, B, C, D",
+        required=True,
+        max_length=20
+
+    )
+    soldi = discord.ui.TextInput(
+        label="💵 Hai 500 euro da spendere?",
+        placeholder=" Si, No",
+        required=True,
+        max_length=20
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
+        if not canale_log:
+            await interaction.followup.send("❌ Canale di approvazione non trovato!", ephemeral=True)
+            return
+
+        veicolo_info = f"{self.modello_veicolo.value.strip()} ({self.targa.value.strip()})"
+
+        embed_richiesta = discord.Embed(
+            title="🛡️ RICHIESTA DOCUMENTO: ASSICURAZIONE VEICOLO",
+            description=(
+                f"👤 **Cittadino:** {interaction.user.mention} (`{interaction.user.id}`)\n"
+                f"📜 **Nome RP:** `{self.nome_rp.value.strip()}`\n"
+                f"🚗 **Modello Veicolo:** `{self.modello_veicolo.value.strip()}`\n"
+                f"🔢 **Targa:** `{self.targa.value.strip()}`\n"
+                f"🪪 **Tipo Patente:** `{self.patente.value.strip()}\n"
+                f"💰 **Costo Previsto:** `€ 500`\n\n"
+                f"⏳ *In attesa di approvazione o rifiuto da parte dello Staff.*"
+            ),
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+        embed_richiesta.set_footer(text="Puglia RP • Valutazione Polizza")
+
+        view = Documenti(
+            user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value.strip(),
+            roblox_user=veicolo_info, # Inviamo le info del veicolo
+            tipo_doc="Assicurazione"
+        )
+
+        await canale_log.send(embed=embed_richiesta, view=view)
+        await interaction.followup.send(
+            f"✅ **Richiesta inviata con successo!** L'assicurazione per **{veicolo_info}** è stata inoltrata allo Staff per l'approvazione.", 
+            ephemeral=True
+        )
+class ModalImmatricolazione(discord.ui.Modal, title="Immatricolazione Veicolo"):
+    proprietario = discord.ui.TextInput(
+        label="Nome e Cognome RP Proprietario",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    tipo_veicolo = discord.ui.TextInput(
+        label="Tipologia Veicolo",
+        placeholder="Es. Auto, moto, ecc...",
+        required=True,
+        max_length=30
+    )
+    modello = discord.ui.TextInput(
+        label="Modello e Marca Veicolo",
+        placeholder="Es. Volskburg Marin",
+        required=True,
+        max_length=50
+    )
+    targa = discord.ui.TextInput(
+        label="Targa del Veicolo",
+        placeholder="Es. AB/BC/10",
+        required=True,
+        max_length=10
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        ID_CANALE_LOG_DOCUMENTI = 1562891209675116544
+
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
+        
+        embed = discord.Embed(
+            title="🚗 NUOVA RICHIESTA IMMATRICOLAZIONE",
+            color=discord.Color.from_rgb(52, 152, 219)
+        )
+        embed.add_field(name="👤 Utente Discord", value=interaction.user.mention, inline=False)
+        embed.add_field(name="📄 Nome RP", value=self.proprietario.value, inline=True)
+        embed.add_field(name="🚙 Tipologia", value=self.tipo_veicolo.value, inline=True)
+        embed.add_field(name="🚘 Modello", value=self.modello.value, inline=True)
+        embed.add_field(name="🔢 Targa", value=self.targa.value.upper(), inline=True)
+
+        view = VistaApprovazioneImmatricolazione(
+            user_id=interaction.user.id,
+            proprietario=self.proprietario.value,
+            tipo_veicolo=self.tipo_veicolo.value,
+            modello=self.modello.value,
+            targa=self.targa.value.upper()
+        )
+
+        if canale_log:
+            await canale_log.send(embed=embed, view=view)
+
+        await interaction.response.send_message(
+            "✅ La tua richiesta di immatricolazione è stata inviata allo staff!",
+            ephemeral=True
+        )
+
+class VistaApprovazioneImmatricolazione(discord.ui.View):
+    def __init__(self, user_id: int, proprietario: str, tipo_veicolo: str, modello: str, targa: str):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+        self.proprietario = proprietario
+        self.tipo_veicolo = tipo_veicolo
+        self.modello = modello
+        self.targa = targa
+
+    @discord.ui.button(label="Approva", style=discord.ButtonStyle.success, emoji="✅", custom_id="btn_approva_imm")
+    async def approva(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ID_FORUM_IMMATRICOLAZIONI = 1569837669905727660
+        
+        forum_channel = interaction.guild.get_channel(ID_FORUM_IMMATRICOLAZIONI)
+        
+        # Disabilita i bottoni nella richiesta dello staff
+        for child in self.children:
+            child.disabled = True
+            
+        embed_richiesta = interaction.message.embeds[0]
+        embed_richiesta.color = discord.Color.green()
+        embed_richiesta.title = "🚗 IMMATRICOLAZIONE APPROVATA"
+        embed_richiesta.add_field(name="👮 Approvato da", value=interaction.user.mention, inline=False)
+        await interaction.response.edit_message(embed=embed_richiesta, view=self)
+
+        # 1. Crea il Post nel Forum
+        if forum_channel and isinstance(forum_channel, discord.ForumChannel):
+            embed_forum = discord.Embed(
+                title=f"🚘 Scheda Veicolo: {self.targa}",
+                color=discord.Color.from_rgb(52, 152, 219)
+            )
+            embed_forum.add_field(name="👤 Proprietario RP", value=self.proprietario, inline=True)
+            embed_forum.add_field(name="🚙 Tipologia", value=self.tipo_veicolo, inline=True)
+            embed_forum.add_field(name="🚘 Modello", value=self.modello, inline=True)
+            embed_forum.add_field(name="🔢 Targa", value=self.targa, inline=True)
+            embed_forum.add_field(name="🆔 Utente", value=f"<@{self.user_id}>", inline=False)
+            embed_forum.set_footer(text=f"Immatricolato da {interaction.user.display_name}")
+
+            await forum_channel.create_thread(
+                name=f"[{self.targa}] {self.modello} ({self.tipo_veicolo}) - {self.proprietario}",
+                embed=embed_forum
+            )
+
+        # 2. Invia il DM all'utente
+        try:
+            utente = await interaction.guild.fetch_member(self.user_id)
+            if utente:
+                embed_dm = discord.Embed(
+                    title="✅ IMMATRICOLAZIONE APPROVATA",
+                    description=(
+                        f"Ciao {utente.mention}, la tua richiesta di immatricolazione per il veicolo "
+                        f"**{self.modello}** ({self.tipo_veicolo} - Targa: **{self.targa}**) è stata **APPROVATA** dallo Staff!\n\n"
+                        f"🚘 È stato creato un post dedicato nel canale Forum con la scheda tecnica del tuo mezzo."
+                    ),
+                    color=discord.Color.green()
+                )
+                await utente.send(embed=embed_dm)
+        except Exception as e:
+            print(f"Impossibile inviare il DM all'utente: {e}")
+
+    @discord.ui.button(label="Rifiuta", style=discord.ButtonStyle.danger, emoji="❌", custom_id="btn_rifiuta_imm")
+    async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for child in self.children:
+            child.disabled = True
+            
+        embed_richiesta = interaction.message.embeds[0]
+        embed_richiesta.color = discord.Color.red()
+        embed_richiesta.title = "🚗 IMMATRICOLAZIONE RIFIUTATA"
+        embed_richiesta.add_field(name="👮 Rifiutato da", value=interaction.user.mention, inline=False)
+        await interaction.response.edit_message(embed=embed_richiesta, view=self)
+
+        # Invia il DM di rifiuto all'utente
+        try:
+            utente = await interaction.guild.fetch_member(self.user_id)
+            if utente:
+                embed_dm = discord.Embed(
+                    title="❌ IMMATRICOLAZIONE RIFIUTATA",
+                    description=(
+                        f"Ciao {utente.mention}, la tua richiesta di immatricolazione per il veicolo "
+                        f"**{self.modello}** ({self.tipo_veicolo} - Targa: **{self.targa}**) è stata **RIFIUTATA** dallo Staff."
+                    ),
+                    color=discord.Color.red()
+                )
+                await utente.send(embed=embed_dm)
+        except Exception as e:
+            print(f"Impossibile inviare il DM all'utente: {e}")
+
+
+
+# --- Vista dei Pulsanti ---
+class VistaPannelloDocumenti(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Cittadinanza Ufficiale", style=discord.ButtonStyle.primary, emoji="❄️", custom_id="btn_cittadinanza")
+    async def btn_cittadinanza(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalCittadinanza())
+
+    @discord.ui.button(label="Patente (A/B/C/D)", style=discord.ButtonStyle.success, emoji="🏎️", custom_id="btn_patente")
+    async def btn_patente(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalPatente())
+
+    @discord.ui.button(label="Stipula Assicurazione (€500)", style=discord.ButtonStyle.success, emoji="🛡️", custom_id="btn_stipula_assicurazione")
+    async def req_assicurazione(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalAssicurazione())
+
+    @discord.ui.button(label="Porto d'Armi", style=discord.ButtonStyle.danger, emoji="🔫", custom_id="btn_armi")
+    async def btn_armi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalPortoDArmi())
+
+    
+# --- Comando Slash /pannello ---
+@bot.tree.command(name="pannello", description="Manda il pannello principale per i documenti (Winter Edition)")
+@app_commands.checks.has_permissions(administrator=True)
+async def pannello_cmd(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="☃️ CENTRO SERVIZI PUGLIA RP - WINTER EDITION ❄️",
+        description=(
+            "☃️ **Benvenuto nella Motorizzazione & Anagrafe Ufficiale!** ❄️\n"
+            "Clicca sui pulsanti in basso per inviare le tue richieste ufficiali.\n\n"
+            "📜 **1. Cittadinanza Ufficiale** ❄️\n"
+            "• **Descrizione:** Registrazione all'Anagrafe del server.\n"
+            "• **Requisiti:** Inserisci Nome e Cognome RP realistici.\n\n"
+            "🚗 **2. Licenza di Guida / Patenti (A, B, C, D)** 🏎️\n"
+            "• **Descrizione:** Registrazione veicolo e licenza di guida.\n"
+            "• **Categorie:** 🏍️ **A** (Moto) | 🚗 **B** (Auto) | 🚛 **C** (Camion) | 🚌 **D** (Bus)\n"
+            "• **Nota:** Il Nome RP deve essere **identico** alla Cittadinanza!\n\n"
+            "🔫 **3. Licenza Porto d'Armi** 🔫\n"
+            "• **Descrizione:** Licenza per detenzione e uso armi legale.\n"
+            "• **Requisiti:** Visita psicofisica idonea e motivazione RP.\n\n"
+            "⚠️ **Regolamento e Note Importanti** 🕸️\n"
+            "1️⃣ Assicurati di non possedere già il documento.\n"
+            "2️⃣ In caso di **rifiuto**, attendere **10 minuti di cooldown** ⏳.\n"
+            "3️⃣ Compila i moduli con serietà: no troll o nomi irrealistici 🍬."
+        ),
+        color=discord.Color.from_rgb(230, 126, 34)
+    )
+
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+
+    embed.set_footer(
+        text="☃️ Puglia RP - Sistema Automazione Documenti • ❄️",
+        icon_url=interaction.guild.icon.url if interaction.guild.icon else None
+    )
+
+    await interaction.response.send_message(embed=embed, view=VistaPannelloDocumenti())
+
+# ==========================================
+# 💰 GESTIONE ECONOMIA UNIFICATA
+# ==========================================
+
+def get_user_eco(user_id_str: str):
+    data = load_data()
+    eco_all = data.setdefault("economia", {})
+    eco_user = eco_all.setdefault(user_id_str, {
+        "cash": 0,
+        "bank": 0,
+        "has_account": False
+    })
+    
+    if "cash" not in eco_user: eco_user["cash"] = 0
+    if "bank" not in eco_user: eco_user["bank"] = 0
+    if "has_account" not in eco_user:
+        eco_user["has_account"] = True if eco_user.get("bank", 0) > 0 else False
+        
+    save_data(data)
+    return eco_user
+
+def update_user_eco(user_id_str: str, eco_data: dict):
+    data = load_data()
+    data.setdefault("economia", {})[user_id_str] = eco_data
+    save_data(data)
+
+
+# ------------------------------------------
+# 💵 COMANDI CITTADINI
+# ------------------------------------------
+
+# 🤝 /paga (Scambio di contanti a mani)
+@bot.tree.command(name="paga", description="Paga un altro cittadino in contanti (mano a mano)")
+@app_commands.describe(utente="Il cittadino a cui consegnare i contanti", importo="Quantità di denaro in euro")
+async def paga_cmd(interaction: discord.Interaction, utente: discord.Member, importo: int):
+    await interaction.response.defer(ephemeral=True)
+
+    if utente.id == interaction.user.id:
+        await interaction.followup.send("❌ Non puoi pagare te stesso!", ephemeral=True)
+        return
+
+    if importo <= 0:
+        await interaction.followup.send("❌ Inserisci un importo valido maggiore di zero!", ephemeral=True)
+        return
+
+    sender_id = str(interaction.user.id)
+    receiver_id = str(utente.id)
+
+    sender_eco = get_user_eco(sender_id)
+    receiver_eco = get_user_eco(receiver_id)
+
+    if sender_eco.get("cash", 0) < importo:
+        await interaction.followup.send(f"❌ Non hai abbastanza contanti in portafoglio! Possiedi solo **€ {sender_eco.get('cash', 0):,}**.", ephemeral=True)
+        return
+
+    sender_eco["cash"] -= importo
+    receiver_eco["cash"] += importo
+
+    update_user_eco(sender_id, sender_eco)
+    update_user_eco(receiver_id, receiver_eco)
+
+    await interaction.followup.send(f"🤝 Hai consegnato **€ {importo:,}** in contanti a {utente.mention}!", ephemeral=True)
+
+
+# 🏦 /bonifico (Trasferimento da conto bancario a conto bancario)
+@bot.tree.command(name="bonifico", description="Effettua un bonifico bancario ad un altro cittadino")
+@app_commands.describe(utente="Il destinatario del bonifico", importo="Quantità di euro da inviare")
+async def bonifico_cmd(interaction: discord.Interaction, utente: discord.Member, importo: int):
+    await interaction.response.defer(ephemeral=True)
+
+    if utente.id == interaction.user.id:
+        await interaction.followup.send("❌ Non puoi inviare un bonifico a te stesso!", ephemeral=True)
+        return
+
+    if importo <= 0:
+        await interaction.followup.send("❌ Inserisci un importo valido maggiore di zero!", ephemeral=True)
+        return
+
+    sender_id = str(interaction.user.id)
+    receiver_id = str(utente.id)
+
+    sender_eco = get_user_eco(sender_id)
+    receiver_eco = get_user_eco(receiver_id)
+
+    if not sender_eco.get("has_account"):
+        await interaction.followup.send("❌ Non possiedi un conto bancario attivo! Aprilo prima allo sportello bancario.", ephemeral=True)
+        return
+
+    if not receiver_eco.get("has_account"):
+        await interaction.followup.send(f"❌ {utente.mention} non possiede un conto bancario attivo!", ephemeral=True)
+        return
+
+    if sender_eco.get("bank", 0) < importo:
+        await interaction.followup.send(f"❌ Saldo bancario insufficiente! Sul tuo conto hai **€ {sender_eco.get('bank', 0):,}**.", ephemeral=True)
+        return
+
+    sender_eco["bank"] -= importo
+    receiver_eco["bank"] += importo
+
+    update_user_eco(sender_id, sender_eco)
+    update_user_eco(receiver_id, receiver_eco)
+
+    await interaction.followup.send(f"🏦 Bonifico di **€ {importo:,}** inviato con successo a {utente.mention}!", ephemeral=True)
+
+
+# 🏦 /deposita (Mettere contanti in banca)
+@bot.tree.command(name="deposita", description="Deposita contanti sul tuo conto bancario")
+@app_commands.describe(importo="L'importo in euro da depositare")
+async def deposita_cmd(interaction: discord.Interaction, importo: int):
+    await interaction.response.defer(ephemeral=True)
+    
+    if importo <= 0:
+        await interaction.followup.send("❌ Inserisci un importo valido!", ephemeral=True)
+        return
+
+    user_id_str = str(interaction.user.id)
+    eco = get_user_eco(user_id_str)
+
+    if not eco.get("has_account"):
+        await interaction.followup.send("❌ Non possiedi un conto bancario attivo!", ephemeral=True)
+        return
+
+    if eco.get("cash", 0) < importo:
+        await interaction.followup.send(f"❌ Non hai abbastanza contanti! Hai solo **€ {eco.get('cash', 0):,}**.", ephemeral=True)
+        return
+
+    eco["cash"] -= importo
+    eco["bank"] += importo
+    update_user_eco(user_id_str, eco)
+
+    await interaction.followup.send(f"✅ Hai depositato **€ {importo:,}** sul tuo conto bancario!", ephemeral=True)
+
+
+# 🏧 /preleva (Prelevare soldi dalla banca in contanti)
+@bot.tree.command(name="preleva", description="Preleva denaro contante dal tuo conto bancario")
+@app_commands.describe(importo="L'importo in euro da prelevare")
+async def preleva_cmd(interaction: discord.Interaction, importo: int):
+    await interaction.response.defer(ephemeral=True)
+
+    if importo <= 0:
+        await interaction.followup.send("❌ Inserisci un importo valido!", ephemeral=True)
+        return
+
+    user_id_str = str(interaction.user.id)
+    eco = get_user_eco(user_id_str)
+
+    if not eco.get("has_account"):
+        await interaction.followup.send("❌ Non possiedi un conto bancario attivo!", ephemeral=True)
+        return
+
+    if eco.get("bank", 0) < importo:
+        await interaction.followup.send(f"❌ Saldo bancario insufficiente! Hai solo **€ {eco.get('bank', 0):,}** in banca.", ephemeral=True)
+        return
+
+    eco["bank"] -= importo
+    eco["cash"] += importo
+    update_user_eco(user_id_str, eco)
+
+    await interaction.followup.send(f"💸 Hai prelevato **€ {importo:,}** dal tuo conto bancario!", ephemeral=True)
+
+
+# ------------------------------------------
+# 🛠️ COMANDI ADMIN / STAFF
+# ------------------------------------------
+
+# ==========================================
+# ➕ / ➖ GESTIONE SOLDI (SOLO STAFF / ADMIN)
+# ==========================================
+
+# Funzione di supporto per verificare se l'utente è Staff o Admin
+def is_staff_o_admin(interaction: discord.Interaction) -> bool:
+    # Controlla se ha permessi da amministratore o di moderazione (es. Gestione Messaggi / Ban)
+    if interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.manage_messages:
+        return True
+    
+    # Se preferisci controllare un ruolo staff specifico, puoi scommentare le righe sotto inserendo l'ID del ruolo Staff:
+    # ID_RUOLO_STAFF = 123456789012345678
+    # ruolo_staff = interaction.guild.get_role(ID_RUOLO_STAFF)
+    # if ruolo_staff and ruolo_staff in interaction.user.roles:
+    #     return True
+        
+    return False
+
+
+# --- ➕ AGGIUNGI SOLDI ---
+@bot.tree.command(name="aggiungi-soldi", description="Aggiungi soldi ad un utente (Solo Staff)")
+@app_commands.describe(utente="L'utente a cui aggiungere denaro", tipo="Dove aggiungere il denaro?", importo="Quantità in euro")
+@app_commands.choices(tipo=[
+    app_commands.Choice(name="💵 Contanti (Portafoglio)", value="cash"),
+    app_commands.Choice(name="🏦 Conto Bancario", value="bank")
+])
+async def aggiungi_soldi_cmd(interaction: discord.Interaction, utente: discord.Member, tipo: app_commands.Choice[str], importo: int):
+    await interaction.response.defer(ephemeral=True)
+
+    if not is_staff_o_admin(interaction):
+        await interaction.followup.send("❌ Questo comando è riservato esclusivamente allo Staff!", ephemeral=True)
+        return
+
+    if importo <= 0:
+        await interaction.followup.send("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
+        return
+
+    user_id_str = str(utente.id)
+    eco = get_user_eco(user_id_str)
+
+    if tipo.value == "bank":
+        eco["has_account"] = True 
+        eco["bank"] += importo
+        destinazione = "conto bancario"
+    else:
+        eco["cash"] += importo
+        destinazione = "portafoglio (contanti)"
+
+    update_user_eco(user_id_str, eco)
+    await interaction.followup.send(f"✅ Aggiunti **€{importo:,}** sul {destinazione} di {utente.mention}!", ephemeral=True)
+
+
+# --- ➖ RIMUOVI SOLDI ---
+@bot.tree.command(name="rimuovi-soldi", description="Rimuovi soldi ad un utente (Solo Staff)")
+@app_commands.describe(utente="L'utente a cui togliere denaro", tipo="Da dove togliere il denaro?", importo="Quantità in euro")
+@app_commands.choices(tipo=[
+    app_commands.Choice(name="💵 Contanti (Portafoglio)", value="cash"),
+    app_commands.Choice(name="🏦 Conto Bancario", value="bank")
+])
+async def rimuovi_soldi_cmd(interaction: discord.Interaction, utente: discord.Member, tipo: app_commands.Choice[str], importo: int):
+    await interaction.response.defer(ephemeral=True)
+
+    if not is_staff_o_admin(interaction):
+        await interaction.followup.send("❌ Questo comando è riservato esclusivamente allo Staff!", ephemeral=True)
+        return
+
+    if importo <= 0:
+        await interaction.followup.send("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
+        return
+
+    user_id_str = str(utente.id)
+    eco = get_user_eco(user_id_str)
+
+    if tipo.value == "bank":
+        eco["bank"] = max(0, eco.get("bank", 0) - importo)
+        destinazione = "conto bancario"
+    else:
+        eco["cash"] = max(0, eco.get("cash", 0) - importo)
+        destinazione = "portafoglio (contanti)"
+
+    update_user_eco(user_id_str, eco)
+    await interaction.followup.send(f"✅ Rimossi **€{importo:,}** dal {destinazione} di {utente.mention}!", ephemeral=True)
+        
+# ==========================================
+# 🏦 APERTURA CONTO BANCARIO (SCRITTURA DIRETTA)
+# ==========================================
+class ModalApriContoIstantaneo(discord.ui.Modal, title="🏦 Apertura Conto Corrente"):
+    nome_cognome = discord.ui.TextInput(label="👤 Nome e Cognome RP", placeholder="Es. Mario Rossi", required=True, max_length=40)
+    eta_rp = discord.ui.TextInput(label="🆔 Hai già la cittadinanza?", placeholder="Si, No", required=True, max_length=10)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        user_id_str = str(interaction.user.id)
+        
+        # Carichiamo ed aggiorniamo direttamente l'economia
+        eco = get_user_eco(user_id_str)
+
+        if eco.get("has_account") and eco.get("bank", 0) > 0:
+            await interaction.followup.send("❌ **Possiedi già un conto corrente attivo su Puglia RP!**", ephemeral=True)
+            return
+
+        # Impostiamo conto attivo + Bonus 1.000€
+        eco["has_account"] = True
+        eco["bank"] = eco.get("bank", 0) + 1000
+        update_user_eco(user_id_str, eco)
+
+        # Salva anche il nome RP
+        data = load_data()
+        data.setdefault("rp_names", {})[user_id_str] = self.nome_cognome.value.strip()
+        save_data(data)
+
+        embed = discord.Embed(
+            title="🎉 CONTO BANCARIO APERTO CON SUCCESSO!",
+            description=(
+                f"Benvenuto nella gestione finanziaria di **Puglia RP**, **{self.nome_cognome.value.strip()}**!\n\n"
+                f"💳 **Stato Conto:** `ATTIVO`\n"
+                f"👤 **Intestatario RP:** `{self.nome_cognome.value.strip()}` (`{self.eta_rp.value.strip()} anni`)\n"
+                f"💰 **Bonus di Benvenuto:** `€ 1.000` accreditati sul tuo conto corrente!"
+            ),
+            color=discord.Color.from_rgb(46, 204, 113),
+            timestamp=discord.utils.utcnow()
+        )
+        embed.set_footer(text="Banca di Puglia RP • Servizi Finanziari Digitali")
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+# ==========================================
+# 💳 COMANDO /PORTAFOGLIO
+# ==========================================
+@bot.tree.command(name="portafoglio", description="Mostra il tuo estratto conto bancario e i contanti")
+async def portafoglio_cmd(interaction: discord.Interaction, utente: discord.Member = None):
+    await interaction.response.defer(ephemeral=True)
+    target = utente or interaction.user
+    user_id_str = str(target.id)
+    
+    # Legge esattamente lo stesso dizionario
+    eco = get_user_eco(user_id_str)
+    
+    cash = eco.get("cash", 0)
+    bank = eco.get("bank", 0)
+    has_account = eco.get("has_account", False)
+
+    # Se ha soldi in banca, mostriamo lo stato attivo a prescindere
+    if bank > 0:
+        has_account = True
+
+    stato_conto = f"**€ {bank:,}**" if has_account else "**Non Posseduto ❌**"
+
+    embed = discord.Embed(
+        title=f"💳 ESTRATTO CONTO — {target.display_name}",
+        color=discord.Color.gold(),
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="💵 Portafoglio (Contanti)", value=f"**€ {cash:,}**", inline=True)
+    embed.add_field(name="🏦 Conto Bancario", value=stato_conto, inline=True)
+    
+    if target.display_avatar:
+        embed.set_thumbnail(url=target.display_avatar.url)
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+class VistaServizioStaff(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🟢 Apri Servizio", style=discord.ButtonStyle.success, custom_id="btn_apri_servizio")
+    async def apri_servizio(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        user_id_str = str(interaction.user.id)
+        data = load_data()
+
+        # 1. Controllo Obbligatorio Identificazione Staff
+        staff_data = data.get("staff_identificati", {})
+        if user_id_str not in staff_data:
+            await interaction.followup.send(
+                "❌ **Non sei identificato come Staff!** Devi prima completare l'identificazione tramite `/identificami` prima di poter andare in servizio.",
+                ephemeral=True
+            )
+            return
+
+        if user_id_str in staff_turni:
+            await interaction.followup.send("⚠️ Sei già in servizio!", ephemeral=True)
+            return
+
+        # Avvio del turno
+        ora_attuale = datetime.now(timezone.utc)
+        staff_turni[user_id_str] = {
+            "inizio": ora_attuale,
+            "pausa_totale_secondi": 0,
+            "pausa_inizio": None,
+            "stato": "attivo"
+        }
+
+        # Log nel canale Log Staff
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_STAFF)
+        if canale_log:
+            embed_log = discord.Embed(
+                title="🟢 ENTRATA IN SERVIZIO STAFF",
+                description=f"👮 **Staffer:** {interaction.user.mention}\n🆔 **Roblox Username:** `{staff_data[user_id_str]['roblox_user']}`\n⏰ **Ora Inizio:** <t:{int(ora_attuale.timestamp())}:T>",
+                color=discord.Color.green(),
+                timestamp=ora_attuale
+            )
+            roblox_id = staff_data[user_id_str].get("roblox_id")
+            if roblox_id:
+                embed_log.set_thumbnail(url=f"https://www.roblox.com/headshot-thumbnail/image?userId={roblox_id}&width=420&height=420&format=png")
+            await canale_log.send(embed=embed_log)
+
+        await interaction.followup.send("✅ **Sei entrato in servizio con successo!** Buona guardia.", ephemeral=True)
+
+
+    @discord.ui.button(label="⏸️ Metti in Pausa", style=discord.ButtonStyle.secondary, custom_id="btn_pausa_servizio")
+    async def pausa_servizio(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        user_id_str = str(interaction.user.id)
+
+        if user_id_str not in staff_turni:
+            await interaction.followup.send("❌ Non sei attualmente in servizio!", ephemeral=True)
+            return
+
+        turno = staff_turni[user_id_str]
+        ora_attuale = datetime.now(timezone.utc)
+
+        if turno["stato"] == "attivo":
+            turno["stato"] = "in_pausa"
+            turno["pausa_inizio"] = ora_attuale
+            msg = "⏸️ **Servizio messo in pausa.**"
+        else:
+            # Ripresa dalla pausa
+            durata_pausa = (ora_attuale - turno["pausa_inizio"]).total_seconds()
+            turno["pausa_totale_secondi"] += durata_pausa
+            turno["stato"] = "attivo"
+            turno["pausa_inizio"] = None
+            msg = "▶️ **Servizio ripreso dalla pausa!**"
+
+        # Log in canale Log Staff
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_STAFF)
+        if canale_log:
+            embed_log = discord.Embed(
+                title="⏸️ CAMBIO STATO SERVIZIO STAFF",
+                description=f"👮 **Staffer:** {interaction.user.mention}\n📌 **Stato:** `{turno['stato'].upper()}`\n⏰ **Ora:** <t:{int(ora_attuale.timestamp())}:T>",
+                color=discord.Color.gold(),
+                timestamp=ora_attuale
+            )
+            await canale_log.send(embed=embed_log)
+
+        await interaction.followup.send(msg, ephemeral=True)
+
+
+    @discord.ui.button(label="🔴 Chiudi Servizio", style=discord.ButtonStyle.danger, custom_id="btn_chiudi_servizio")
+    async def chiudi_servizio(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        user_id_str = str(interaction.user.id)
+
+        if user_id_str not in staff_turni:
+            await interaction.followup.send("❌ Non sei in servizio!", ephemeral=True)
+            return
+
+        turno = staff_turni.pop(user_id_str)
+        ora_attuale = datetime.now(timezone.utc)
+
+        # Se era in pausa al momento della chiusura, calcoliamo la pausa finale
+        if turno["stato"] == "in_pausa" and turno["pausa_inizio"]:
+            turno["pausa_totale_secondi"] += (ora_attuale - turno["pausa_inizio"]).total_seconds()
+
+        tempo_totale_secondi = (ora_attuale - turno["inizio"]).total_seconds()
+        tempo_effettivo_secondi = max(0, tempo_totale_secondi - turno["pausa_totale_secondi"])
+        minuti_fatti = int(tempo_effettivo_secondi // 60)
+
+        # Salvataggio dati e aggiornamento ore
+        data = load_data()
+        leaderboard = data.get("leaderboard_staff", {})
+        leaderboard[user_id_str] = leaderboard.get(user_id_str, 0) + minuti_fatti
+        data["leaderboard_staff"] = leaderboard
+        save_data(data)
+
+        # Log Chiusura
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_STAFF)
+        if canale_log:
+            ore = minuti_fatti // 60
+            minuti = minuti_fatti % 60
+            embed_log = discord.Embed(
+                title="🔴 USCITA DAL SERVIZIO STAFF",
+                description=(
+                    f"👮 **Staffer:** {interaction.user.mention}\n"
+                    f"⏱️ **Tempo Effettivo:** `{ore}h {minuti}m` ({minuti_fatti} min)\n"
+                    f"⏰ **Ora Chiusura:** <t:{int(ora_attuale.timestamp())}:T>"
+                ),
+                color=discord.Color.red(),
+                timestamp=ora_attuale
+            )
+            await canale_log.send(embed=embed_log)
+
+        await aggiorna_leaderboard_embed(interaction.guild)
+        await interaction.followup.send(f"✅ **Servizio concluso.** Hai registrato `{minuti_fatti}` minuti di servizio!", ephemeral=True)
+
+
+# ==========================================
+# 📊 AGGIORNAMENTO LEADERBOARD AUTOMATICA
+# ==========================================
+async def aggiorna_leaderboard_embed(guild: discord.Guild):
+    canale = guild.get_channel(ID_CANALE_LEADERBOARD)
+    if not canale:
+        return
+
+    data = load_data()
+    leaderboard = data.get("leaderboard_staff", {})
+
+    # Ordina per minuti di servizio decrescenti
+    classifica_ordinata = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
+
+    embed = discord.Embed(
+        title="🏆 CLASSIFICA SETTIMANALE ORE STAFF — PUGLIA RP ❄️",
+        description="I minuti di servizio si aggiornano automaticamente alla chiusura di ogni turno.\n*Si resetta ogni Lunedì a 00:00.*\n\n",
+        color=discord.Color.gold(),
+        timestamp=datetime.now(timezone.utc)
+    )
+
+    if not classifica_ordinata:
+        embed.description += "*Nessun dato di servizio registrato per questa settimana.*"
+    else:
+        testo = ""
+        medaglie = ["🥇", "🥈", "🥉"]
+        for idx, (u_id, minuti) in enumerate(classifica_ordinata[:10], start=1):
+            icona = medaglie[idx-1] if idx <= 3 else f"`#{idx}`"
+            ore = minuti // 60
+            m_res = minuti % 60
+            testo += f"{icona} <@{u_id}> — **{ore}h {m_res}m** (`{minuti}` min)\n"
+        embed.add_field(name="📋 Top Staffer della Settimana", value=testo, inline=False)
+
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+    embed.set_footer(text="Puglia RP • Reset automatico il Lunedì a mezzanotte")
+
+    # Cerca un messaggio esistente del bot per modificarlo, altrimenti lo invia
+    async for msg in canale.history(limit=10):
+        if msg.author == guild.me and msg.embeds and "CLASSIFICA SETTIMANALE" in msg.embeds[0].title:
+            await msg.edit(embed=embed)
+            return
+
+    await canale.send(embed=embed)
+
+
+# ==========================================
+# ⏰ TASK AUTOMATICO: RESET LUNEDÌ MEZZANOTTE
+# ==========================================
+@tasks.loop(minutes=1)
+async def task_reset_settimanale():
+    ora_ora = datetime.now(timezone.utc)
+    # Lunedì = 0, Ora = 00:00
+    if ora_ora.weekday() == 0 and ora_ora.hour == 0 and ora_ora.minute == 0:
+        data = load_data()
+        data["leaderboard_staff"] = {}
+        save_data(data)
+
+        for guild in bot.guilds:
+            canale = guild.get_channel(ID_CANALE_LEADERBOARD)
+            if canale:
+                await canale.send("🔄 **RESET SETTIMANALE ESEGUITO!** La classifica ore staff è stata resettata per la nuova settimana.")
+                await aggiorna_leaderboard_embed(guild)
+
+# ==========================================
+# 🏦 MODULO CONTO BANCARIO DIRECT (APERTURA ISTANTANEA)
+# ==========================================
+
+
+# 2. Vista del Pannello con il Pulsante "Apri Conto Bancario"
+class VistaContoBancario(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Apri Conto Bancario", style=discord.ButtonStyle.success, emoji="💳", custom_id="btn_apri_conto_bancario_direct")
+    async def btn_apri_conto(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Apre subito il modale corretto all'utente
+        await interaction.response.send_modal(ModalApriContoIstantaneo())
+
+
+# 3. Comando Slash per spawnare il Pannello Bancario (Solo Admin)
+@bot.tree.command(name="pannello-contobancario", description="Invia il pannello per l'apertura immediata del conto bancario (Solo Admin)")
+@app_commands.checks.has_permissions(administrator=True)
+async def pannello_conto_cmd(interaction: discord.Interaction):
+    await interaction.response.defer()
+
+    embed = discord.Embed(
+        title="🏦 ┆ BANCA DI PUGLIA RP — SPORTELLO DIGITALE",
+        description=(
+            "✨ **Benvenuto cittadino!** Gestisci al meglio le tue finanze all'interno della regione.\n"
+            "Apri subito il tuo conto corrente personale in modo semplice, rapido e sicuro.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ),
+        color=discord.Color.from_rgb(230, 126, 34),
+        timestamp=discord.utils.utcnow()
+    )
+
+    # Aggiungiamo dei campi ordinati per dare un tocco pulito e professionale
+    embed.add_field(
+        name="📋 ┆ Requisiti per l'Apertura",
+        value="• Essere residenti registrati a **Puglia RP**\n• Utilizzare i propri dati anagrafici reali in RP",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🎁 ┆ Vantaggi Esclusivi",
+        value="• Ricevi subito un bonus di benvenuto di **€ 1.000** sul nuovo conto!\n• Accesso a bonifici, gestione contanti e prestiti regionali.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="⚡ ┆ Come procedere",
+        value="*Clicca sul pulsante sottostante per avviare la procedura guidata e registrare subito il tuo conto bancario.*",
+        inline=False
+    )
+
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+        
+    embed.set_footer(text="Puglia RP • Sistema Finanziario Integrato", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+
+    await interaction.followup.send(embed=embed, view=VistaContoBancario())
+
+
+# ==========================================
+# 💸 MODULO: MULTE AVANZATE (BANCA / CONTANTI + NEGATIVO)
+# ==========================================
+
+ID_RUOLO_FDO = 1569792506722525285  # ID del ruolo FDO autorizzato
+
+@bot.tree.command(name="multa", description="Emetti una sanzione pecuniaria scalando i fondi da Banca o Contanti")
+@app_commands.describe(
+    utente="L'utente da multare",
+    importo="Importo della multa",
+    fonte="Da dove prelevare i soldi",
+    motivo="Motivazione della multa"
+)
+@app_commands.choices(fonte=[
+    app_commands.Choice(name="🏦 Conto Bancario (Banca)", value="bank"),
+    app_commands.Choice(name="💵 Portafoglio (Contanti)", value="cash")
+])
+async def multa_cmd(interaction: discord.Interaction, utente: discord.Member, importo: int, fonte: app_commands.Choice[str], motivo: str):
+    await interaction.response.defer(ephemeral=True)
+
+    # 🛑 Controllo se l'utente possiede il ruolo FDO
+    ruolo_fdo = interaction.guild.get_role(ID_RUOLO_FDO)
+    if not ruolo_fdo or ruolo_fdo not in interaction.user.roles:
+        await interaction.followup.send("❌ Questo comando è riservato esclusivamente alle Forze dell'Ordine!", ephemeral=True)
+        return
+
+    if importo <= 0:
+        await interaction.followup.send("❌ L'importo della multa deve essere maggiore di zero!", ephemeral=True)
+        return
+
+    user_id_str = str(utente.id)
+    eco = get_user_eco(user_id_str)
+
+    # 1. Controllo se sceglie la Banca ma non ha il conto
+    if fonte.value == "bank" and not eco.get("has_account"):
+        await interaction.followup.send(
+            f"❌ **Impossibile emettere la multa!** {utente.mention} **non possiede un conto bancario attivo**, quindi non è possibile scalare i fondi dalla Banca.",
+            ephemeral=True
+        )
+        return
+
+    # 2. Scaliamo i soldi (permettendo anche l'andata in negativo)
+    eco[fonte.value] -= importo
+    update_user_eco(user_id_str, eco)
+
+    # 3. Invio nel canale registro multe
+    canale_multe = interaction.guild.get_channel(ID_CANALE_REGISTRO_MULTE)
+    if canale_multe:
+        embed_log = discord.Embed(
+            title="📜 NOTIFICA DI SANZIONE / MULTA – PUGLIA RP",
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+        embed_log.add_field(name="👤 Sanzionato", value=utente.mention, inline=True)
+        embed_log.add_field(name="👮 Emessa da", value=interaction.user.mention, inline=True)
+        embed_log.add_field(name="💰 Importo", value=f"€{importo:,}", inline=True)
+        embed_log.add_field(name="💳 Prelevato da", value="🏦 Conto Bancario" if fonte.value == "bank" else "💵 Portafoglio", inline=True)
+        embed_log.add_field(name="📊 Saldo Residuo Utente", value=f"🏦 Banca: €{eco['bank']:,}\n💵 Contanti: €{eco['cash']:,}", inline=False)
+        embed_log.add_field(name="📜 Motivazione", value=f"```\n{motivo}\n```", inline=False)
+
+        if utente.display_avatar:
+            embed_log.set_thumbnail(url=utente.display_avatar.url)
+
+        await canale_multe.send(embed=embed_log)
+
+    fonte_testo = "Conto Bancario" if fonte.value == "bank" else "Portafoglio"
+    await interaction.followup.send(
+        f"✅ Multa di **€{importo:,}** emessa con successo a {utente.mention} (prelevata da **{fonte_testo}**).\n"
+        f"📊 Nuovo saldo utente: 🏦 **€{eco['bank']:,}** | 💵 **€{eco['cash']:,}**",
+        ephemeral=True
+    )
+
+
+# ==========================================
+# ❄️ COMANDO: /sessione-online (Con link diretto)
+# ==========================================
+@bot.tree.command(name="sessione-online", description="Annuncia l'apertura della sessione di Puglia RP con grafica avanzata")
+@app_commands.checks.has_permissions(administrator=True)
+async def sessione_cmd(interaction: discord.Interaction, codice: str = "In Corso"):
+    await interaction.response.defer()
+    
+    embed = discord.Embed(
+        title="❄️ MAFIE — SESSIONE APERTA! ☃️",
+        description=(
+            "✨ *Le porte della regione sono ufficialmente spalancate!* "
+            "Preparate i veicoli, radunate la vostra fazione e immergetevi in questa nuova avventura autunnale. 🔮"
+        ),
+        color=discord.Color.from_rgb(230, 126, 34), # Arancione autunnale
+        timestamp=discord.utils.utcnow()
+    )
+    
+    # Campi ordinati e ricchi di dettagli
+    embed.add_field(
+        name="🆔 Codice in game",
+        value=f"> `{codice}`",
+        inline=True
+    )
+    embed.add_field(
+        name="👮 Stato Forze & Servizi",
+        value="> `Attivi & Operativi`",
+        inline=True
+    )
+    embed.add_field(
+        name="📜 Regole e Comportamento",
+        value="> *È richiesto il massimo rispetto del regolamento e del buon senso in RP.*",
+        inline=False
+    )
+    embed.add_field(
+        name="🔗 Come Partecipare",
+        value="> 1️⃣ Entra nel server di gioco\n> 2️⃣ Rispetta le direttive dello Staff\n> 3️⃣ Vivi la tua storia al massimo!",
+        inline=False
+    )
+    
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+        
+    embed.set_footer(text="Puglia RP • Sistema Ufficiale di Sessione", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+    
+    # Imposta l'immagine tramite il link diretto di Discord
+    embed.set_image(url="https://media.discordapp.net/attachments/1569724333704749107/1569838608347828304/Gemini_Generated_Image_jr98vmjr98vmjr98.jpg?ex=6af4e9a2&is=6af39822&hm=c9feb0602fe27105147d1f140d1ee0613abc4d8ba668d5f1880b684761e15503&=&format=webp")
+    
+    await interaction.followup.send(content="@everyone 🔔 **Nuova Sessione Disponibile!**", embed=embed)
+
+
+# ==========================================
+# 🍂 COMANDO: /sessione-offline (Con link diretto)
+# ==========================================
+@bot.tree.command(name="sessione-offline", description="Manda l'annuncio di chiusura sessione con grafica avanzata")
+@app_commands.checks.has_permissions(administrator=True)
+async def sessione_offline_cmd(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    embed = discord.Embed(
+        title="🌙 MAFIE — SESSIONE CHIUSA 🕯️",
+        description=(
+            "🍂 *La nebbia cala sulle strade della nostra regione... La sessione di gioco è giunta ufficialmente al termine.* "
+            "Grazie a tutti i cittadini, alle forze dell'ordine e allo staff per aver reso questa giornata indimenticabile! 👻"
+        ),
+        color=discord.Color.from_rgb(192, 57, 43), # Rosso scuro autunnale
+        timestamp=discord.utils.utcnow()
+    )
+    
+    # Campi di riepilogo per la chiusura
+    embed.add_field(
+        name="📊 Resoconto Giornata",
+        value="> ` Sessione Conclusa con Successo `",
+        inline=False
+    )
+    embed.add_field(
+        name="🙏 Ringraziamenti Speciali",
+        value="> Un ringraziamento speciale a tutti i partecipanti e ai reparti di emergenza (FDO, VVF, CRI) per l'ottimo lavoro svolto.",
+        inline=False
+    )
+    embed.add_field(
+        name="📢 Prossimi Appuntamenti",
+        value="> *Controlla regolarmente i canali informativi per non perdere l'apertura della prossima sessione!*",
+        inline=False
+    )
+    
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+        
+    embed.set_footer(text="Puglia RP • Chiusura Sessione", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+    
+    # Imposta l'immagine tramite il link diretto di Discord
+    embed.set_image(url="https://media.discordapp.net/attachments/1561284670883242086/1568566537932120186/Frozen_Puglia_Roleplay_Emblem.png?ex=6af0f1ad&is=6aefa02d&hm=38e645fbcce6797a9f00d493bd0f347a5323b14916d2cfa717ff9358e92a2cd0&=&format=webp&quality=lossless")
+    
+    await interaction.followup.send(embed=embed)
+
+# ==========================================
+# ⭐ MODULO: RECENSIONI STAFF (HALLOWEEN/AUTUMN EDITION)
+# ==========================================
+@bot.tree.command(name="recensisci-staff", description="Invia una recensione per un membro dello Staff di Puglia RP")
+@app_commands.describe(staffer="Menziona lo staffer da recensire", valutazione="Valutazione da 1 a 10 stelle", motivo="Motivazione della recensione")
+@app_commands.choices(valutazione=[
+    app_commands.Choice(name="⭐ 1 / 10", value=1),
+    app_commands.Choice(name="⭐⭐ 2 / 10", value=2),
+    app_commands.Choice(name="⭐⭐⭐ 3 / 10", value=3),
+    app_commands.Choice(name="⭐⭐⭐⭐ 4 / 10", value=4),
+    app_commands.Choice(name="⭐⭐⭐⭐⭐ 5 / 10", value=5),
+    app_commands.Choice(name="⭐⭐⭐⭐⭐⭐ 6 / 10", value=6),
+    app_commands.Choice(name="⭐⭐⭐⭐⭐⭐⭐ 7 / 10", value=7),
+    app_commands.Choice(name="⭐⭐⭐⭐⭐⭐⭐⭐ 8 / 10", value=8),
+    app_commands.Choice(name="⭐⭐⭐⭐⭐⭐⭐⭐⭐ 9 / 10", value=9),
+    app_commands.Choice(name="🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟 10 / 10", value=10)
+])
+async def recensisci_staff_cmd(interaction: discord.Interaction, staffer: discord.Member, valutazione: app_commands.Choice[int], motivo: str):
+    # 1. Verifico che il comando sia eseguito nel canale dedicato
+    if interaction.channel.id != ID_CANALE_COMANDO_RECENSIONI:
+        await interaction.response.send_message(
+            f"❌ **Canale Errato!** Puoi inviare recensioni solo nel canale <#{ID_CANALE_COMANDO_RECENSIONI}>.", 
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    forum_channel = interaction.guild.get_channel(ID_CANALE_LOG_RECENSIONI)
+
+    if not forum_channel or not isinstance(forum_channel, discord.ForumChannel):
+        await interaction.followup.send("❌ **Errore:** Canale Forum delle recensioni non trovato!", ephemeral=True)
+        return
+
+    # 2. Generazione grafica delle stelle
+    stelle_grafiche = "⭐" * valutazione.value
+
+    # 3. Creazione Embed Elegante
+    embed = discord.Embed(
+        title="🌟 NUOVA RECENSIONE STAFF — PUGLIA RP 🌟",
+        color=discord.Color.from_rgb(230, 126, 34),
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="👮 Staffer Valutato", value=staffer.mention, inline=True)
+    embed.add_field(name="👤 Recensione da", value=interaction.user.mention, inline=True)
+    embed.add_field(name="⭐ Valutazione", value=f"**{valutazione.value} / 10**\n{stelle_grafiche}", inline=False)
+    embed.add_field(name="💬 Motivazione", value=f"```\n{motivo}\n```", inline=False)
+
+    if staffer.display_avatar:
+        embed.set_thumbnail(url=staffer.display_avatar.url)
+    
+    # Inserimento Immagine Grafica Ufficiale
+    if LINK_IMMAGINE_RECENSIONE:
+        embed.set_image(url=LINK_IMMAGINE_RECENSIONE)
+
+    embed.set_footer(text="Puglia RP • Sistema Recensioni Ufficiale", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+
+    # 4. Creazione Thread nel Forum
+    titolo_post = f"⭐ [{valutazione.value}/10] Recensione - {staffer.display_name}"
+    
+    try:
+        await forum_channel.create_thread(name=titolo_post, embed=embed)
+        await interaction.followup.send(f"✅ **Recensione pubblicata con successo per {staffer.mention}!**", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Errore durante la pubblicazione nel forum: `{e}`", ephemeral=True)
+
+# ==========================================
+# 🚨 MODULO: ARRESTI & MULTE
+# ==========================================
+
+@bot.tree.command(name="arresta", description="Emetti un mandato di arresto per un utente")
+@app_commands.describe(utente="L'utente da arrestare", durata="Durata della pena", motivo="Motivazione dell'arresto")
+async def arresta_cmd(interaction: discord.Interaction, utente: discord.Member, durata: str, motivo: str):
+    await interaction.response.defer(ephemeral=True)
+
+    # Controlla se l'utente possiede il ruolo FDO
+    ruolo_fdo = interaction.guild.get_role(ID_RUOLO_FDO)
+    if not ruolo_fdo or ruolo_fdo not in interaction.user.roles:
+        await interaction.followup.send("❌ Questo comando è riservato esclusivamente alle Forze dell'Ordine!", ephemeral=True)
+        return
+
+    canale_arresti = interaction.guild.get_channel(ID_CANALE_REGISTRO_ARRESTI)
+    if not canale_arresti:
+        await interaction.followup.send("❌ Canale registro arresti non trovato!", ephemeral=True)
+        return
+
+    embed = discord.Embed(title="🚨 REGISTRO ARRESTI – PUGLIA RP", color=discord.Color.dark_red(), timestamp=discord.utils.utcnow())
+    embed.add_field(name="👤 Utente", value=utente.mention, inline=True)
+    embed.add_field(name="👮 Agente/Staff", value=interaction.user.mention, inline=True)
+    embed.add_field(name="⏰ Durata", value=f"`{durata}`", inline=False)
+    embed.add_field(name="📜 Motivazione", value=f"```\n{motivo}\n```", inline=False)
+
+    if utente.display_avatar:
+        embed.set_thumbnail(url=utente.display_avatar.url)
+
+    await canale_arresti.send(embed=embed)
+    await interaction.followup.send(f"✅ Arresto registrato per {utente.mention}.", ephemeral=True)
+
+# ==========================================
+# 👥 MODULO: LISTA PLAYER (STAFF)
+# ==========================================
+@bot.tree.command(name="lista-player", description="Visualizza l'elenco e il conteggio dei player online e offline nel server")
+async def lista_player_cmd(interaction: discord.Interaction):
+    role_staff = interaction.guild.get_role(ROLE_STAFF_BASE_ID)
+    if role_staff not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ **Comando riservato allo Staff di Puglia RP!**", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    guild = interaction.guild
+    online_members = []
+    offline_members = []
+
+    for member in guild.members:
+        if member.bot:
+            continue
+        if member.status != discord.Status.offline:
+            online_members.append(member)
+        else:
+            offline_members.append(member)
+
+    total_players = len(online_members) + len(offline_members)
+
+    online_str = ", ".join([m.mention for m in online_members[:15]]) if online_members else "Nessuno"
+    if len(online_members) > 15:
+        online_str += f" ...e altri {len(online_members) - 15}"
+
+    offline_str = ", ".join([m.mention for m in offline_members[:15]]) if offline_members else "Nessuno"
+    if len(offline_members) > 15:
+        offline_str += f" ...e altri {len(offline_members) - 15}"
+
+    embed = discord.Embed(
+        title="📊 STATO PLAYER — PUGLIA RP",
+        description=f"👥 **Totale Cittadini nel Server:** `{total_players}`",
+        color=discord.Color.blue(),
+        timestamp=discord.utils.utcnow()
+    )
+
+    embed.add_field(name=f"🟢 Online / Attivi (`{len(online_members)}`)", value=online_str, inline=False)
+    embed.add_field(name=f"⚪ Offline (`{len(offline_members)}`)", value=offline_str, inline=False)
+
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    embed.set_footer(text="Puglia RP • Pannello Riservato Staff", icon_url=interaction.user.display_avatar.url)
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+# ==========================================
+# 📌 SETUP EMBED INFORMATIVO RECENSIONI STAFF
+# ==========================================
+@bot.tree.command(name="setup-recensioni", description="Invia l'embed informativo nel canale recensioni (Solo Admin)")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_recensioni_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    canale_recensioni = interaction.guild.get_channel(1563156712679145502)
+    if not canale_recensioni:
+        await interaction.followup.send("❌ **Errore:** Canale `1563156712679145502` non trovato!", ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title="🌟 PUGLIA RP — RECENSIONI STAFF ❄️☃️",
+        description=(
+            "✨ **Vuoi valutare l'operato del nostro Staff?**\n"
+            "La tua opinione è fondamentale per aiutarci a migliorare la qualità del Roleplay e premiare i membri dello Staff più attivi e disponibili! 🛡️⚡\n\n"
+            "─────────────────────────────\n\n"
+            "📝 **COME INVIARE UNA RECENSIONE:**\n\n"
+            "Usa il comando ufficiale `/recensisci-staff` e completa tutti i campi richiesti:\n\n"
+            "🔹 **`staffer:`** `@Membro_Staff` *(Menziona lo staffer che vuoi valutare)*\n"
+            "🔹 **`valutazione:`** `1 - 10 Stelle` *(Seleziona il voto da 1 a 10)*\n"
+            "🔹 **`motivo:`** `Scrivi qui il tuo messaggio` *(Spiega in dettaglio l'esperienza)*\n\n"
+            "─────────────────────────────\n\n"
+            "📌 **Esempio Pratico:**\n"
+            "```text\n"
+            "/recensisci-staff staffer: @MarioRossi valutazione: 10 / 10 motivo: Ottimo supporto durante il ticket, veloce e super gentile!\n"
+            "```\n"
+            "⚠️ *Tutte le recensioni valide verranno pubblicate automaticamente nell'Anagrafe/Forum delle Recensioni! Non usare il comando per scherzi o troll.* 🚫"
+        ),
+        color=discord.Color.from_rgb(137, 207, 240), 
+        timestamp=discord.utils.utcnow()
+    )
+
+    # Impostazione Grafica Ufficiale Puglia RP
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+
+    # Immagine Banner Ufficiale Puglia RP Recensione Staff
+    embed.set_image(url="https://media.discordapp.net/attachments/1561284670883242086/1568566537932120186/Frozen_Puglia_Roleplay_Emblem.png?ex=6af0f1ad&is=6aefa02d&hm=38e645fbcce6797a9f00d493bd0f347a5323b14916d2cfa717ff9358e92a2cd0&=&format=webp&quality=lossless")
+    embed.set_footer(text="Puglia RP • Valuta il nostro Staff 👑", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+
+    await canale_recensioni.send(embed=embed)
+    await interaction.followup.send(f"✅ **Embed informativo inviato con successo in** <#1563156712679145502>!", ephemeral=True)
+
+# ==========================================
+# ❌ GESTIONE RIFIUTO DOCUMENTO CON DM SICURO
+# ==========================================
+
+# Esempio all'interno dell'on_submit del Modale di Rifiuto o comando di Rifiuto:
+async def notifica_rifiuto(interaction: discord.Interaction, utente: discord.Member, tipo_documento: str, motivazione: str):
+    dm_inviato = False
+
+    # 1. Creiamo l'Embed per l'utente
+    embed_dm = discord.Embed(
+        title="❌ DOCUMENTO RIFIUTATO — PUGLIA RP",
+        description=(
+            f"Ciao {utente.mention}, la tua richiesta per **{tipo_documento}** è stata **RIFIUTATA**.\n\n"
+            f"📝 **Motivazione:** `{motivazione}`\n\n"
+            f"⏳ Potrai riprovare ad inviare la richiesta tra **10 minuti**."
+        ),
+        color=discord.Color.red(),
+        timestamp=discord.utils.utcnow()
+    )
+    embed_dm.set_footer(text="Puglia RP • Servizio Anagrafe e Documenti")
+
+    # 2. Tentativo di invio in Messaggio Privato (DM)
+    try:
+        await utente.send(embed=embed_dm)
+        dm_inviato = True
+    except discord.Forbidden:
+        # L'utente ha i DM chiusi o ha bloccato i bot
+        dm_inviato = False
+    except Exception:
+        dm_inviato = False
+
+    # 3. Risposta allo Staff/FDO che ha eseguito il rifiuto
+    if dm_inviato:
+        await interaction.followup.send(
+            f"✅ Documento rifiutato a {utente.mention}.\n📩 **Messaggio inviato con successo nei suoi DM!**", 
+            ephemeral=True
+        )
+    else:
+        # Se i DM sono chiusi, avvisa lo staff
+        await interaction.followup.send(
+            f"⚠️ Documento rifiutato a {utente.mention}.\n"
+            f"❌ **Impossibile inviare il DM:** L'utente ha i Messaggi Diretti disattivati nelle impostazioni di privacy di Discord!", 
+            ephemeral=True
+        )
+
+    # 4. Log nel Canale dei Log Documenti
+    canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
+    if canale_log:
+        embed_log = discord.Embed(
+            title="❌ DOCUMENTO RIFIUTATO",
+            description=(
+                f"👤 **Utente:** {utente.mention} (`{utente.id}`)\n"
+                f"📄 **Tipo Documento:** `{tipo_documento}`\n"
+                f"🛡️ **Rifiutato da:** {interaction.user.mention}\n"
+                f"📝 **Motivazione:** `{motivazione}`\n"
+                f"📩 **Notificato in DM:** `{'SÌ ✅' if dm_inviato else 'NO ❌ (DM Chiusi)'}`"
+            ),
+            color=discord.Color.dark_red(),
+            timestamp=discord.utils.utcnow()
+        )
+        await canale_log.send(embed=embed_log)
+
+# ==========================================
+# 📋 GUI SELECT MENU STIPENDI
+# ==========================================
+class SelectStipendio(discord.ui.Select):
+    def __init__(self, ruoli_disponibili):
+        opzioni = []
+        if "fdo" in ruoli_disponibili:
+            opzioni.append(discord.SelectOption(
+                label="Stipendio FDO", 
+                description="Ritira € 3.500 (Forze dell'Ordine)", 
+                emoji="👮‍♂️", 
+                value="fdo"
+            ))
+        if "vvf" in ruoli_disponibili:
+            opzioni.append(discord.SelectOption(
+                label="Stipendio VVF", 
+                description="Ritira € 3.000 (Vigili del Fuoco)", 
+                emoji="🚒", 
+                value="vvf"
+            ))
+        if "cri" in ruoli_disponibili:
+            opzioni.append(discord.SelectOption(
+                label="Stipendio CRI", 
+                description="Ritira € 3.000 (Croce Rossa)", 
+                emoji="🚑", 
+                value="cri"
+            ))
+        if "cittadino" in ruoli_disponibili:
+            opzioni.append(discord.SelectOption(
+                label="Sussidio Cittadino", 
+                description="Ritira € 800 (Sussidio Base)", 
+                emoji="🪪", 
+                value="cittadino"
+            ))
+
+        super().__init__(
+            placeholder="Seleziona quale stipendio desideri ritirare...", 
+            min_values=1, 
+            max_values=1, 
+            options=opzioni
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        scelta = self.values[0]
+        user_id_str = str(interaction.user.id)
+        tempo_attuale = int(time.time())
+        COOLDOWN_SECONDI = 7 * 24 * 60 * 60  # 7 giorni reali in secondi
+        
+        # 1. Caricamento dati generali dal file JSON
+        data = load_data()
+        
+        # 2. Controllo Cooldown di 7 giorni
+        cooldowns = data.setdefault("stipendi_cooldown", {})
+        user_cooldowns = cooldowns.setdefault(user_id_str, {})
+        ultimo_ritiro = user_cooldowns.get(scelta, 0)
+
+        if tempo_attuale - ultimo_ritiro < COOLDOWN_SECONDI:
+            tempo_rimanente = COOLDOWN_SECONDI - (tempo_attuale - ultimo_ritiro)
+            giorni = tempo_rimanente // 86400
+            ore = (tempo_rimanente % 86400) // 3600
+            minuti = (tempo_rimanente % 3600) // 60
+            
+            await interaction.followup.send(
+                f"⏳ **Hai già ritirato questo stipendio di recente!**\n\n"
+                f"Devi attendere esattamente **7 giorni** tra un ritiro e l'altro.\n"
+                f"⏰ **Prossimo ritiro disponibile tra:** `{giorni} giorni, {ore} ore e {minuti} minuti`.",
+                ephemeral=True
+            )
+            return
+
+        # 3. Importi ufficiali degli stipendi
+        importi = {
+            "fdo": 3500,
+            "vvf": 3000,
+            "cri": 3000,
+            "cittadino": 800
+        }
+        stipendio_scelto = importi.get(scelta, 800)
+
+        # 4. Modifica l'economia usando la funzione del tuo bot e salva nel JSON
+        eco = get_user_eco(user_id_str)
+        eco["bank"] = eco.get("bank", 0) + stipendio_scelto
+        
+        # Sincronizza e salva in modo permanente nel dizionario generale e nel file
+        economia_data = data.setdefault("economia", {})
+        economia_data[user_id_str] = eco
+        
+        # Salva il timestamp del nuovo cooldown
+        user_cooldowns[scelta] = tempo_attuale
+        save_data(data)
+
+        # Disabilita il menu a tendina per evitare doppi click
+        self.disabled = True
+        try:
+            await interaction.edit_original_response(view=self.view)
+        except Exception:
+            pass
+
+        # 5. Messaggio di conferma finale
+        await interaction.followup.send(
+            f"✅ **Stipendio accreditato con successo!**\n\n"
+            f"💼 **Settore:** `{scelta.upper()}`\n"
+            f"🏦 **Accreditato in Banca:** `€ {stipendio_scelto:,}`\n"
+            f"💳 **Nuovo Saldo in Banca:** `€ {eco['bank']:,}`\n\n"
+            f"📅 *Potrai ritirare nuovamente questo stipendio tra 7 giorni.*",
+            ephemeral=True
+        )
+
+class ViewStipendi(discord.ui.View):
+    def __init__(self, ruoli_disponibili):
+        super().__init__(timeout=60)
+        self.add_item(SelectStipendio(ruoli_disponibili))
+
+# ==========================================
+# 💸 COMANDO SLASH: /ritira-stipendio
+# ==========================================
+@bot.tree.command(name="ritira-stipendio", description="Apri la GUI per ritirare il tuo stipendio settimanale in banca")
+async def ritira_stipendio_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    
+    user_roles = [role.id for role in interaction.user.roles]
+    ruoli_posseduti = []
+    
+    # Verifica dei ruoli sul server
+    if ID_RUOLO_FDO in user_roles:
+        ruoli_posseduti.append("fdo")
+    if ID_RUOLO_VVF in user_roles:
+        ruoli_posseduti.append("vvf")
+    if ID_RUOLO_CRI in user_roles:
+        ruoli_posseduti.append("cri")
+    if ID_RUOLO_CITTADINO in user_roles:
+        ruoli_posseduti.append("cittadino")
+        
+    if not ruoli_posseduti:
+        await interaction.followup.send(
+            "❌ **Non possiedi alcun ruolo lavorativo o di cittadino** per poter ritirare uno stipendio!",
+            ephemeral=True
+        )
+        return
+
+    # Messaggio GUI privato con menu a tendina
+    embed_gui = discord.Embed(
+        title="🏦 PANNELLO ACCREDITO STIPENDI",
+        description=(
+            "Seleziona dal menu a tendina lo stipendio da depositare sul tuo **Conto Bancario**.\n\n"
+            "⚠️ *Gli stipendi si possono riscattare **una volta ogni 7 giorni** per ciascuna categoria.*"
+        ),
+        color=discord.Color.green(),
+        timestamp=discord.utils.utcnow()
+    )
+    embed_gui.set_footer(text="Puglia RP • Banca Centrale")
+
+    view = ViewStipendi(ruoli_posseduti)
+    await interaction.followup.send(embed=embed_gui, view=view, ephemeral=True)
+
+# ==========================================
+# 🗺️ COMANDO: /mappa-puglia
+# ==========================================
+@bot.tree.command(name="mappa-puglia", description="Mostra la mappa ufficiale e le zone esplorabili di Puglia RP")
+async def mappa_puglia_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=False) # Mettilo a True se vuoi che lo veda solo chi lo digita
+    
+    embed = discord.Embed(
+        title="🗺️ PUGLIA RP — MAPPA UFFICIALE REGIONALE",
+        description=(
+            "✨ *Benvenuto nella mappa geografica di **Puglia RP**!* "
+            "Esplora le città, le coste e le zone rurali della nostra regione illuminate dai colori caldi dell'autunno. 🍂"
+        ),
+        color=discord.Color.from_rgb(230, 126, 34), # Arancione autunnale
+        timestamp=discord.utils.utcnow()
+    )
+    
+    # Campi descrittivi con le zone principali
+    embed.add_field(
+        name="🏙️ Aree Urbane & Centri",
+        value="> Zone residenziali, attività commerciali, banche e istituzioni governative.",
+        inline=False
+    )
+    embed.add_field(
+        name="🚨 Limiti di velocità",
+        value="> 🏎️ Limiti in centro/fuori città = 50 Km/h\n> 🏎️ Limiti in autostrada = 120 Km/h\n> 🏎️ Limiti in aree pedonali = 30 Km/h",
+        inline=False
+    )
+    embed.add_field(
+        name="🌊 Zone Costiere & Panoramiche",
+        value="> Strade litoranee e punti di ritrovo immersi nel paesaggio pugliese.",
+        inline=False
+    )
+    embed.add_field(
+        name="🧭 Consigli per il Viaggio",
+        value="> *Rispetta i limiti di codice stradale e guida con prudenza durante gli spostamenti in RP!*",
+        inline=False
+    )
+    
+    if interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+        
+    embed.set_footer(text="Puglia RP • Cartografia Geografica", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+    
+    # Imposta l'immagine della mappa tramite il link diretto
+    embed.set_image(url="https://media.discordapp.net/attachments/1561284670883242086/1568566537932120186/Frozen_Puglia_Roleplay_Emblem.png?ex=6af0f1ad&is=6aefa02d&hm=38e645fbcce6797a9f00d493bd0f347a5323b14916d2cfa717ff9358e92a2cd0&=&format=webp&quality=lossless")
+    
+    await interaction.followup.send(embed=embed)
+
+class VistaPannelloImmatricolazione(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Immatricola Veicolo", style=discord.ButtonStyle.primary, emoji="🚗", custom_id="btn_immatricola_main")
+    async def btn_immatricola(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalImmatricolazione())
+
+@bot.tree.command(name="aiuto", description="❄️ Mostra la guida ufficiale e il funzionamento del server")
+async def aiuto(interaction: discord.Interaction):
+    embed_aiuto = discord.Embed(
+        title="❄️ GUIDA UFFICIALE PUGLIA RP • WINTER EDITION ❄️",
+        description=(
+            "Benvenuto nel portale di aiuto del server! Qui trovi tutte le informazioni "
+            "necessarie per orientarti tra i servizi e le attività invernali.\n\n"
+            "**📋 Servizi Principali Disponibili:**\n"
+            "• **Cittadinanza & Documenti:** Richiedi i documenti ufficiali tramite il pannello dedicato.\n"
+            "• **Patenti e Immatricolazioni:** Registra i tuoi veicoli (auto, moto, camion e bus) e richiedi la licenza di guida[cite: 3].\n"
+            "• **Porto d'Armi:** Invia la richiesta per la detenzione e l'uso delle armi nel rispetto delle regole RP.\n\n"
+            "**⚙️ Come muoversi:**\n"
+            "1️⃣ Interagisci con i bottoni e i menu nei canali dei servizi.\n"
+            "2️⃣ Compila con attenzione i moduli richiesti (usando dati realistici).\n"
+            "3️⃣ Attendi la verifica e l'approvazione da parte dello Staff.\n\n"
+            "*Buon divertimento e goditi l'atmosfera invernale di Puglia RP! ☃️🚗*"
+        ),
+        color=discord.Color.from_rgb(137, 207, 240) # Azzurro ghiaccio
+    )
+    embed_aiuto.set_footer(text="Puglia RP • Centro Assistenza Ufficiale")
+
+    # ephemeral=True rende il messaggio visibile solo all'utente che ha digitato il comando
+    await interaction.response.send_message(embed=embed_aiuto, ephemeral=True)
+
+# ==========================================
+# 📺 MODULO: TG5 (NOTIZIE / FLASH NEWS - SOLO STAFF)
+# ==========================================
+
+@bot.tree.command(name="tg5", description="📺 Trasmetti una Flash News del TG5 (Solo Staff)")
+@app_commands.describe(notizia="La notizia da mandare in onda")
+async def tg5_cmd(interaction: discord.Interaction, notizia: str):
+    await interaction.response.defer(ephemeral=True)
+
+    # Controlla se l'utente appartiene allo Staff (Admin o permessi di moderazione)
+    if not is_staff_o_admin(interaction):
+        await interaction.followup.send("❌ Questo comando è riservato esclusivamente allo Staff!", ephemeral=True)
+        return
+
+    # Embed del TG5 a tema invernale
+    embed_tg5 = discord.Embed(
+        title="📺 TG5 • EDIZIONE STRAORDINARIA",
+        description=f"**Inviato da:** {interaction.user.mention}\n\n**🔴 ULTIM'ORA:**\n{notizia}",
+        color=discord.Color.from_rgb(137, 207, 240),  # Azzurro ghiaccio
+        timestamp=discord.utils.utcnow()
+    )
+    embed_tg5.set_footer(text="Puglia RP • TG5 News Department")
+    embed_tg5.set_thumbnail(url="https://images.emojiterra.com/google/android-12l/512px/1f4fa.png")
+
+    # Invia l'embed nel canale pubblico
+    await interaction.channel.send(embed=embed_tg5)
+    await interaction.followup.send("✅ Notizia del TG5 trasmessa con successo!", ephemeral=True)
+
+
+# ==========================================
+# 🚀 EVENTO ON_READY & AVVIO BOT
+# ==========================================
+stati_rotazione = [
+    "💡 Codice: dvnfa570",
+    "🔴 Sessione Chiusa - In Manutenzione ❄️",
+    "🆘 Usa /aiuto per i comandi ☃️"
+]
+
+@tasks.loop(seconds=30)
+async def cambia_stato_periodico():
+    import random
+    testo_casuale = random.choice(stati_rotazione)
+    await bot.change_presence(activity=discord.CustomActivity(name=testo_casuale))
+
+
+@bot.event
+async def on_ready():
+    print(f'Bot connesso come {bot.user}')
+    
+    # Avvia la rotazione dello stato ogni 30 secondi
+    if not cambia_stato_periodico.is_running():
+        cambia_stato_periodico.start()
+
+    bot.add_view(VistaPannelloDocumenti())
+    bot.add_view(VistaContoBancario())
+    bot.add_view(VistaServizioStaff())
+
+    # --- INVIO AUTOMATICO PANNELLO ---
+    ID_CANALE_PANNELLO = 1569720582474571806 # Inserisci l'ID del canale dove vuoi il pannello
+    canale = bot.get_channel(ID_CANALE_PANNELLO)
+    if canale:
+        embed = discord.Embed(
+            title="❄️ CENTRO SERVIZI PUGLIA RP - WINTER EDITION ☃️",
+            description=(
+                "☃️ **Benvenuto nella Motorizzazione & Anagrafe Ufficiale!** ❄️\n"
+                "Clicca sui pulsanti in basso per inviare le tue richieste ufficiali.\n\n"
+                "📜 **1. Cittadinanza Ufficiale** ❄️\n"
+                "• **Descrizione:** Registrazione all'Anagrafe del server.\n"
+                "• **Requisiti:** Inserisci Nome e Cognome RP realistici.\n\n"
+                "🚗 **2. Licenza di Guida / Patenti (A, B, C, D)** 🏎️\n"
+                "• **Descrizione:** Registrazione veicolo e licenza di guida.\n"
+                "• **Categorie:** 🏍️ **A** (Moto) | 🚗 **B** (Auto) | 🚛 **C** (Camion) | 🚌 **D** (Bus)\n"
+                "• **Nota:** Il Nome RP deve essere **identico** alla Cittadinanza!\n\n"
+                "🔫 **3. Licenza Porto d'Armi** 🔫\n"
+                "• **Descrizione:** Licenza per detenzione e uso armi legale.\n"
+                "• **Requisiti:** Visita psicofisica idonea e motivazione RP.\n\n"
+                "⚠️ **Regolamento e Note Importanti** 🔥\n"
+                "1️⃣ Assicurati di non possedere già il documento.\n"
+                "2️⃣ In caso di **rifiuto**, attendere **10 minuti di cooldown** ⏳.\n"
+                "3️⃣ Compila i moduli con serietà: no troll o nomi irrealistici 🍬."
+            ),
+            color=discord.Color.from_rgb(137, 207, 240)
+        )
+        await canale.send(embed=embed, view=VistaPannelloDocumenti())
+
+    # 2. INVIO PANNELLO IMMATRICOLAZIONI (ID: 1568988787613237361)
+    ID_CANALE_IMM = 1568988787613237361
+    canale_imm = bot.get_channel(ID_CANALE_IMM)
+    if canale_imm:
+        # Pulisce i vecchi messaggi del bot per evitare doppi invii
+        async for msg in canale_imm.history(limit=10):
+            if msg.author == bot.user:
+                await msg.delete()
+
+        embed_imm = discord.Embed(
+            title="❄️ MOTORIZZAZIONE & IMMATRICOLAZIONE VEICOLI - WINTER EDITION ❄️",
+            description=(
+                "**Benvenuto nel portale ufficiale delle immatricolazioni di Puglia RP!**\n\n"
+                "Gestisci la registrazione dei tuoi veicoli in modo rapido e sicuro per circolare sulle strade della regione.\n\n"
+                "**📋 Come procedere:**\n"
+                "• Clicca sul pulsante **Immatricola Veicolo** qui sotto.\n"
+                "• Compila tutti i campi richiesti nel modulo (Nome RP, Modello e Targa).\n"
+                "• Invia la richiesta e attendi la verifica da parte del nostro team di staff.\n\n"
+                "**⚠️ Regole e Note Importanti:**\n"
+                "1️⃣ **Dati Reali:** Utilizza esclusivamente dati coerenti con il tuo personaggio RP.\n"
+                "2️⃣ **Targhe Valide:** Assicurati che la targa inserita non sia già in uso da altri veicoli.\n"
+                "3️⃣ **Approvazione:** Una volta approvata la pratica, verrà creato automaticamente un post dedicato nel canale Forum con la scheda tecnica del tuo mezzo.\n\n"
+                "*Mantieni la massima serietà e rispetta il codice della strada anche tra i ghiacci invernali! 🚗❄️*"
+            ),
+            color=discord.Color.from_rgb(137, 207, 240) # Colore azzurro ghiaccio
+        )
+        embed_imm.set_footer(text="Puglia RP • Sistema Ufficiale Immatricolazioni")
+        
+        await canale_imm.send(embed=embed_imm, view=VistaPannelloImmatricolazione())
 
 # ==========================================
 # 3. SISTEMA CITTADINANZA
@@ -212,6 +2425,78 @@ class VistaCittadinanza(discord.ui.View):
             await interaction.response.send_message("❌ **Cittadinanza già attiva!** Risulti già in possesso dei documenti regolari in questa città.", ephemeral=True)
             return
         await interaction.response.send_modal(ModuloCittadinanza())
+
+# ==========================================
+# 🚗 MODALE RICHIESTA PATENTE
+# ==========================================
+class ModalPatente(discord.ui.Modal, title="🚗 Richiesta Patente Puglia RP"):
+    nome_rp = discord.ui.TextInput(
+        label="👤 Nome e Cognome RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    roblox_user = discord.ui.TextInput(
+        label="🎮 Nome Utente Roblox",
+        placeholder="Es. Player123",
+        required=True,
+        max_length=50
+    )
+    tipo_patente = discord.ui.TextInput(
+        label="🪪 Tipo di Patente (A, B, C, D)",
+        placeholder="Es. B",
+        required=True,
+        max_length=20
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        # 1. Recupera il canale dei log/accettazione dello staff
+        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
+        if not canale_log:
+            await interaction.followup.send(
+                "❌ **Errore:** Il canale di approvazione documenti non è configurato correttamente! Avvisa un Amministratore.", 
+                ephemeral=True
+            )
+            return
+
+        # 2. Crea l'embed da mandare allo Staff nel canale di accettazione
+        embed_richiesta = discord.Embed(
+            title=f"🚗 RICHIESTA DOCUMENTO: {self.tipo_patente.value.strip().upper()}",
+            description=(
+                f"👤 **Cittadino:** {interaction.user.mention} (`{interaction.user.id}`)\n"
+                f"📜 **Nome RP:** `{self.nome_rp.value.strip()}`\n"
+                f"🪪 **Tipo Richiesto:** `{self.tipo_patente.value.strip()}`\n"
+                f"🎮 **Account Roblox:** `{self.roblox_user.value.strip()}`\n\n"
+                f"⏳ *In attesa di approvazione o rifiuto da parte dello Staff.*"
+            ),
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+        embed_richiesta.set_footer(text="Puglia RP • In attesa di valutazione")
+
+        # 3. Collega i pulsanti della vista Documenti passando il tipo esatto (es. "Patente B")
+        view = Documenti(
+            user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value.strip(),
+            roblox_user=self.roblox_user.value.strip(),
+            tipo_doc=self.tipo_patente.value.strip()  # Importante per far riconoscere se è A, B, C o D
+        )
+
+        try:
+            # 4. Invia nel canale staff con i bottoni Accetta/Rifiuta
+            await canale_log.send(embed=embed_richiesta, view=view)
+            await interaction.followup.send(
+                "✅ **Richiesta di patente inviata con successo!** È stata inoltrata allo Staff per la valutazione.", 
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Impossibile inviare la richiesta nel canale staff. Errore: `{e}`", 
+                ephemeral=True
+            )
+            await interaction.followup.send(f"❌ Errore nell'invio della richiesta nel canale: `{e}`", ephemeral=True)
 
 # ==========================================
 # 4. SISTEMA FAMIGLIA CHIOCARO
