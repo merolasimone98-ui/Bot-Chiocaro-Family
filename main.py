@@ -42,12 +42,14 @@ ID_CANALE_PANNELLO_CHIOCARO = 1569740451861504060
 ID_CANALE_STAFF_CHIOCARO = 1569740933061156955
 ID_RUOLO_STAFF_CHIOCARO = 1569480368246235167
 ID_CANALE_ANNUNCI_CHIOCARO = 1569741365594816512
+ID_RUOLO_MEMBRO_CHIOCARO = 1569486576214478919  # <-- RUOLO CHIOCARO
 
 # ID FAMIGLIA CATUOZZO
 ID_CANALE_PANNELLO_CATUOZZO = 1569743489447501865
 ID_CANALE_STAFF_CATUOZZO = 1569743678648623216
 ID_RUOLO_STAFF_CATUOZZO = 1569481117055328447
 ID_CANALE_ANNUNCI_CATUOZZO = 1569743744306118666
+ID_RUOLO_MEMBRO_CATUOZZO = 1569486737649041408  # <-- RUOLO CATUOZZO
 
 # ==========================================
 # 3. SISTEMA CITTADINANZA (STAFF & MODULO)
@@ -215,6 +217,14 @@ class VistaStaffChiocaro(discord.ui.View):
         guild = interaction.guild
         utente = guild.get_member(self.utente_id)
 
+        # Assegna il ruolo Chiocaro all'utente accettato
+        ruolo_membro = guild.get_role(ID_RUOLO_MEMBRO_CHIOCARO)
+        if utente and ruolo_membro:
+            try:
+                await utente.add_roles(ruolo_membro)
+            except Exception as e:
+                print(f"Errore assegnazione ruolo Chiocaro: {e}")
+
         if utente:
             try:
                 embed_dm = discord.Embed(
@@ -312,7 +322,7 @@ class VistaRichiestaChiocaro(discord.ui.View):
         await interaction.response.send_modal(ModuloChiocaro())
 
 # ==========================================
-# 5. SISTEMA FAMIGLIA CATUOZZO
+# 5. SISTEMA FAMIGLIA CATUOZZO (EMBED GIALLI)
 # ==========================================
 class VistaStaffCatuozzo(discord.ui.View):
     def __init__(self, utente_id: int, conferma: str, motivo_ingresso: str, motivo_scelta: str):
@@ -332,12 +342,20 @@ class VistaStaffCatuozzo(discord.ui.View):
         guild = interaction.guild
         utente = guild.get_member(self.utente_id)
 
+        # Assegna il ruolo Catuozzo all'utente accettato
+        ruolo_membro = guild.get_role(ID_RUOLO_MEMBRO_CATUOZZO)
+        if utente and ruolo_membro:
+            try:
+                await utente.add_roles(ruolo_membro)
+            except Exception as e:
+                print(f"Errore assegnazione ruolo Catuozzo: {e}")
+
         if utente:
             try:
                 embed_dm = discord.Embed(
                     title="🎉 BENVENUTO NELLA FAMIGLIA CATUOZZO!",
                     description="La tua richiesta di adesione è stata **approvata**!\nOra fai ufficialmente parte della **Famiglia Catuozzo**.",
-                    color=discord.Color.purple()
+                    color=discord.Color.gold()
                 )
                 await utente.send(embed=embed_dm)
             except Exception:
@@ -348,7 +366,7 @@ class VistaStaffCatuozzo(discord.ui.View):
             embed_annuncio = discord.Embed(
                 title="⚡ NUOVO MEMBRO IN FAMIGLIA CATUOZZO ⚡",
                 description=f"Diamo tutti il benvenuto a {utente.mention if utente else f'<@{self.utente_id}>'} che si è ufficialmente unito alla **Famiglia Catuozzo**! ⚔️🐺",
-                color=discord.Color.purple()
+                color=discord.Color.gold()
             )
             if utente:
                 embed_annuncio.set_thumbnail(url=utente.avatar.url if utente.avatar else utente.default_avatar.url)
@@ -410,7 +428,7 @@ class ModuloCatuozzo(discord.ui.Modal, title="⚡ Candidatura Famiglia Catuozzo"
                     f"💭 **Perché vuole entrare:**\n```{self.motivo_ingresso.value}```\n"
                     f"⭐ **Perché dovremmo scegliere lui/lei:**\n```{self.motivo_scelta.value}```"
                 ),
-                color=discord.Color.purple()
+                color=discord.Color.gold()
             )
             view = VistaStaffCatuozzo(
                 utente_id=interaction.user.id,
@@ -530,7 +548,7 @@ async def on_ready():
             embed_chiocaro.set_footer(text="Famiglia Chiocaro • Reclutamento Ufficiale")
             await canale_chiocaro.send(embed=embed_chiocaro, view=VistaRichiestaChiocaro())
 
-    # 4. PANNELLO FAMIGLIA CATUOZZO AUTOMATICO
+    # 4. PANNELLO FAMIGLIA CATUOZZO AUTOMATICO (GIALLO)
     canale_catuozzo = bot.get_channel(ID_CANALE_PANNELLO_CATUOZZO)
     if canale_catuozzo:
         async for msg in canale_catuozzo.history(limit=10):
@@ -540,7 +558,7 @@ async def on_ready():
             embed_catuozzo = discord.Embed(
                 title="⚡ ── RECLUTAMENTO FAMIGLIA CATUOZZO ── ⚔️",
                 description="Vuoi far parte della Famiglia Catuozzo?\n\nClicca sul pulsante blu qui sotto per inviare la tua candidatura ufficiale alla dirigenza!",
-                color=discord.Color.purple()
+                color=discord.Color.gold()
             )
             embed_catuozzo.set_footer(text="Famiglia Catuozzo • Reclutamento Ufficiale")
             await canale_catuozzo.send(embed=embed_catuozzo, view=VistaRichiestaCatuozzo())
