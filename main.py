@@ -42,17 +42,24 @@ ID_CANALE_PANNELLO_CHIOCARO = 1569740451861504060
 ID_CANALE_STAFF_CHIOCARO = 1569740933061156955
 ID_RUOLO_STAFF_CHIOCARO = 1569480368246235167
 ID_CANALE_ANNUNCI_CHIOCARO = 1569741365594816512
-ID_RUOLO_MEMBRO_CHIOCARO = 1569486576214478919  # <-- RUOLO CHIOCARO
+ID_RUOLO_MEMBRO_CHIOCARO = 1569486576214478919
 
 # ID FAMIGLIA CATUOZZO
 ID_CANALE_PANNELLO_CATUOZZO = 1569743489447501865
 ID_CANALE_STAFF_CATUOZZO = 1569743678648623216
 ID_RUOLO_STAFF_CATUOZZO = 1569481117055328447
 ID_CANALE_ANNUNCI_CATUOZZO = 1569743744306118666
-ID_RUOLO_MEMBRO_CATUOZZO = 1569486737649041408  # <-- RUOLO CATUOZZO
+ID_RUOLO_MEMBRO_CATUOZZO = 1569486737649041408
+
+# ID FAMIGLIA LIFARDO
+ID_CANALE_PANNELLO_LIFARDO = 1569747038785245355
+ID_CANALE_STAFF_LIFARDO = 1569747072108986629
+ID_CANALE_ANNUNCI_LIFARDO = 1569747095173333002
+ID_RUOLO_STAFF_LIFARDO = 1569496579218341958
+ID_RUOLO_MEMBRO_LIFARDO = 1569496594892595210
 
 # ==========================================
-# 3. SISTEMA CITTADINANZA (STAFF & MODULO)
+# 3. SISTEMA CITTADINANZA
 # ==========================================
 class VistaStaffDecisione(discord.ui.View):
     def __init__(self, utente_id: int, nome_ic: str, eta_ic: str, data_nascita: str, famiglia: str):
@@ -217,7 +224,6 @@ class VistaStaffChiocaro(discord.ui.View):
         guild = interaction.guild
         utente = guild.get_member(self.utente_id)
 
-        # Assegna il ruolo Chiocaro all'utente accettato
         ruolo_membro = guild.get_role(ID_RUOLO_MEMBRO_CHIOCARO)
         if utente and ruolo_membro:
             try:
@@ -322,7 +328,7 @@ class VistaRichiestaChiocaro(discord.ui.View):
         await interaction.response.send_modal(ModuloChiocaro())
 
 # ==========================================
-# 5. SISTEMA FAMIGLIA CATUOZZO (EMBED GIALLI)
+# 5. SISTEMA FAMIGLIA CATUOZZO
 # ==========================================
 class VistaStaffCatuozzo(discord.ui.View):
     def __init__(self, utente_id: int, conferma: str, motivo_ingresso: str, motivo_scelta: str):
@@ -342,7 +348,6 @@ class VistaStaffCatuozzo(discord.ui.View):
         guild = interaction.guild
         utente = guild.get_member(self.utente_id)
 
-        # Assegna il ruolo Catuozzo all'utente accettato
         ruolo_membro = guild.get_role(ID_RUOLO_MEMBRO_CATUOZZO)
         if utente and ruolo_membro:
             try:
@@ -447,7 +452,132 @@ class VistaRichiestaCatuozzo(discord.ui.View):
         await interaction.response.send_modal(ModuloCatuozzo())
 
 # ==========================================
-# 6. COMANDO /tumore
+# 6. SISTEMA FAMIGLIA LIFARDO
+# ==========================================
+class VistaStaffLifardo(discord.ui.View):
+    def __init__(self, utente_id: int, conferma: str, motivo_ingresso: str, motivo_scelta: str):
+        super().__init__(timeout=None)
+        self.utente_id = utente_id
+        self.conferma = conferma
+        self.motivo_ingresso = motivo_ingresso
+        self.motivo_scelta = motivo_scelta
+
+    @discord.ui.button(label="Accetta 🟢", style=discord.ButtonStyle.green, custom_id="staff_lifardo_accetta")
+    async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ruolo_autorizzato = interaction.guild.get_role(ID_RUOLO_STAFF_LIFARDO)
+        if not ruolo_autorizzato or ruolo_autorizzato not in interaction.user.roles:
+            await interaction.response.send_message("❌ Non hai il ruolo autorizzato per gestire le richieste della Famiglia Lifardo.", ephemeral=True)
+            return
+
+        guild = interaction.guild
+        utente = guild.get_member(self.utente_id)
+
+        # Assegna il ruolo Lifardo all'utente accettato
+        ruolo_membro = guild.get_role(ID_RUOLO_MEMBRO_LIFARDO)
+        if utente and ruolo_membro:
+            try:
+                await utente.add_roles(ruolo_membro)
+            except Exception as e:
+                print(f"Errore assegnazione ruolo Lifardo: {e}")
+
+        if utente:
+            try:
+                embed_dm = discord.Embed(
+                    title="🎉 BENVENUTO NELLA FAMIGLIA LIFARDO!",
+                    description="La tua richiesta di adesione è stata **approvata**!\nOra fai ufficialmente parte della **Famiglia Lifardo**.",
+                    color=discord.Color.gold()
+                )
+                await utente.send(embed=embed_dm)
+            except Exception:
+                pass
+
+        canale_annunci = guild.get_channel(ID_CANALE_ANNUNCI_LIFARDO)
+        if canale_annunci:
+            embed_annuncio = discord.Embed(
+                title="🦅 NUOVO MEMBRO IN FAMIGLIA LIFARDO 🦅",
+                description=f"Diamo tutti il benvenuto a {utente.mention if utente else f'<@{self.utente_id}>'} che si è ufficialmente unito alla **Famiglia Lifardo**! ⚜️🦁",
+                color=discord.Color.gold()
+            )
+            if utente:
+                embed_annuncio.set_thumbnail(url=utente.avatar.url if utente.avatar else utente.default_avatar.url)
+            await canale_annunci.send(embed=embed_annuncio)
+
+        embed_modificato = interaction.message.embeds[0]
+        embed_modificato.color = discord.Color.green()
+        embed_modificato.add_field(name="Stato Pratica", value=f"🟢 **Accettato** da {interaction.user.mention}", inline=False)
+        for child in self.children:
+            child.disabled = True
+
+        await interaction.message.edit(embed=embed_modificato, view=self)
+        await interaction.response.send_message("Candidatura accettata e annuncio inviato!", ephemeral=True)
+
+    @discord.ui.button(label="Rifiuta 🔴", style=discord.ButtonStyle.red, custom_id="staff_lifardo_rifiuta")
+    async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ruolo_autorizzato = interaction.guild.get_role(ID_RUOLO_STAFF_LIFARDO)
+        if not ruolo_autorizzato or ruolo_autorizzato not in interaction.user.roles:
+            await interaction.response.send_message("❌ Non hai il ruolo autorizzato per gestire le richieste della Famiglia Lifardo.", ephemeral=True)
+            return
+
+        guild = interaction.guild
+        utente = guild.get_member(self.utente_id)
+
+        if utente:
+            try:
+                embed_dm = discord.Embed(
+                    title="❌ RICHIESTA LIFARDO RIFIUTATA",
+                    description="La tua candidatura per entrare nella **Famiglia Lifardo** è stata **respinta**.",
+                    color=discord.Color.red()
+                )
+                await utente.send(embed=embed_dm)
+            except Exception:
+                pass
+
+        embed_modificato = interaction.message.embeds[0]
+        embed_modificato.color = discord.Color.red()
+        embed_modificato.add_field(name="Stato Pratica", value=f"🔴 **Rifiutato** da {interaction.user.mention}", inline=False)
+        for child in self.children:
+            child.disabled = True
+
+        await interaction.message.edit(embed=embed_modificato, view=self)
+        await interaction.response.send_message("Candidatura rifiutata.", ephemeral=True)
+
+class ModuloLifardo(discord.ui.Modal, title="🦅 Candidatura Famiglia Lifardo"):
+    conferma = discord.ui.TextInput(label="Sei sicuro di voler entrare?", style=discord.TextStyle.short, required=True, max_length=50)
+    motivo_ingresso = discord.ui.TextInput(label="Perché vuoi entrare?", style=discord.TextStyle.paragraph, required=True, max_length=300)
+    motivo_scelta = discord.ui.TextInput(label="Perché dovremmo scegliere te?", style=discord.TextStyle.paragraph, required=True, max_length=300)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message("✅ **Candidatura inviata con successo!** La dirigenza della Famiglia Lifardo valuterà la tua richiesta.", ephemeral=True)
+        canale_staff = interaction.guild.get_channel(ID_CANALE_STAFF_LIFARDO)
+        if canale_staff:
+            embed_staff = discord.Embed(
+                title="📥 Nuova Candidatura - Famiglia Lifardo",
+                description=(
+                    f"👤 **Candidato:** {interaction.user.mention} (`{interaction.user.id}`)\n\n"
+                    f"❓ **Conferma di voler entrare:**\n```{self.conferma.value}```\n"
+                    f"💭 **Perché vuole entrare:**\n```{self.motivo_ingresso.value}```\n"
+                    f"⭐ **Perché dovremmo scegliere lui/lei:**\n```{self.motivo_scelta.value}```"
+                ),
+                color=discord.Color.gold()
+            )
+            view = VistaStaffLifardo(
+                utente_id=interaction.user.id,
+                conferma=self.conferma.value,
+                motivo_ingresso=self.motivo_ingresso.value,
+                motivo_scelta=self.motivo_scelta.value
+            )
+            await canale_staff.send(embed=embed_staff, view=view)
+
+class VistaRichiestaLifardo(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Entra nella Famiglia Lifardo 🦅", style=discord.ButtonStyle.blurple, custom_id="btn_richiesta_lifardo_perm")
+    async def apri_modulo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModuloLifardo())
+
+# ==========================================
+# 7. COMANDO /tumore
 # ==========================================
 @bot.tree.command(name="tumore", description="Simula una brutta notizia per un membro del server")
 @app_commands.describe(membro="Il membro a cui vuoi assegnare la notizia (opzionale)")
@@ -473,7 +603,7 @@ async def tumore(interaction: discord.Interaction, membro: discord.Member = None
     await interaction.response.send_message(embed=embed)
 
 # ==========================================
-# 7. EVENTI DI AVVIO (ON_READY)
+# 8. EVENTI DI AVVIO (ON_READY)
 # ==========================================
 @bot.event
 async def on_ready():
@@ -482,6 +612,7 @@ async def on_ready():
     bot.add_view(VistaCittadinanza())
     bot.add_view(VistaRichiestaChiocaro())
     bot.add_view(VistaRichiestaCatuozzo())
+    bot.add_view(VistaRichiestaLifardo())
 
     # Sincronizzazione comandi
     for guild in bot.guilds:
@@ -548,7 +679,7 @@ async def on_ready():
             embed_chiocaro.set_footer(text="Famiglia Chiocaro • Reclutamento Ufficiale")
             await canale_chiocaro.send(embed=embed_chiocaro, view=VistaRichiestaChiocaro())
 
-    # 4. PANNELLO FAMIGLIA CATUOZZO AUTOMATICO (GIALLO)
+    # 4. PANNELLO FAMIGLIA CATUOZZO AUTOMATICO
     canale_catuozzo = bot.get_channel(ID_CANALE_PANNELLO_CATUOZZO)
     if canale_catuozzo:
         async for msg in canale_catuozzo.history(limit=10):
@@ -562,10 +693,25 @@ async def on_ready():
             )
             embed_catuozzo.set_footer(text="Famiglia Catuozzo • Reclutamento Ufficiale")
             await canale_catuozzo.send(embed=embed_catuozzo, view=VistaRichiestaCatuozzo())
-            print("✅ Pannello Catuozzo inviato in automatico!")
+
+    # 5. PANNELLO FAMIGLIA LIFARDO AUTOMATICO
+    canale_lifardo = bot.get_channel(ID_CANALE_PANNELLO_LIFARDO)
+    if canale_lifardo:
+        async for msg in canale_lifardo.history(limit=10):
+            if msg.author == bot.user:
+                break
+        else:
+            embed_lifardo = discord.Embed(
+                title="🦅 ── RECLUTAMENTO FAMIGLIA LIFARDO ── ⚜️",
+                description="Vuoi far parte della Famiglia Lifardo?\n\nClicca sul pulsante blu qui sotto per inviare la tua candidatura ufficiale alla dirigenza!",
+                color=discord.Color.gold()
+            )
+            embed_lifardo.set_footer(text="Famiglia Lifardo • Reclutamento Ufficiale")
+            await canale_lifardo.send(embed=embed_lifardo, view=VistaRichiestaLifardo())
+            print("✅ Pannello Lifardo inviato in automatico!")
 
 # ==========================================
-# 8. AVVIO APPLICAZIONE
+# 9. AVVIO APPLICAZIONE
 # ==========================================
 keep_alive()
 
