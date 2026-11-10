@@ -86,7 +86,7 @@ class VistaStaffDecisione(discord.ui.View):
                         tag_oggetti.append(tag)
                         break
 
-                # Crea il thread nel forum con il titolo formattato richiesto
+                # Crea il thread nel forum con il titolo formattato
                 await canale_forum.create_thread(
                     name=f"CITTADINANZA = {self.nome_ic}",
                     embed=embed_forum,
@@ -157,7 +157,7 @@ class VistaStaffDecisione(discord.ui.View):
         await interaction.response.send_message("Richiesta rifiutata.", ephemeral=True)
 
 # ==========================================
-# 4. MODULO AGGIORNATO CON IL CAMPO FAMIGLIA
+# 4. MODULO & VISTA REGISTRAZIONE UTENTE
 # ==========================================
 class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"):
     nome_ic = discord.ui.TextInput(
@@ -229,6 +229,17 @@ class VistaCittadinanza(discord.ui.View):
 
     @discord.ui.button(label="Ottieni Cittadinanza 🪪", style=discord.ButtonStyle.green, custom_id="btn_cittadinanza_perm")
     async def apri_modulo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ruolo_cittadino = interaction.guild.get_role(ID_RUOLO_CITTADINO)
+        
+        # Controllo se l'utente possiede già il ruolo cittadino
+        if ruolo_cittadino and ruolo_cittadino in interaction.user.roles:
+            await interaction.response.send_message(
+                "❌ **Possiedi già la cittadinanza!** Non puoi compilare nuovamente il modulo.",
+                ephemeral=True
+            )
+            return
+
+        # Se non lo possiede, apre il modale
         await interaction.response.send_modal(ModuloCittadinanza())
 
 # ==========================================
