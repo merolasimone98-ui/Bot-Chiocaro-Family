@@ -21,7 +21,7 @@ def keep_alive():
     thread.start()
 
 # ==========================================
-# 2. INIZIALIZZAZIONE BOT DISCORD & ID
+# 2. INIZIALIZZAZIONE BOT DISCORD & ID CORRETTI
 # ==========================================
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -29,7 +29,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 ID_CANALE_REGOLAMENTO = 1569483884465225861
 ID_RUOLO_CITTADINO = 1569719339198845112
 ID_CANALE_RICHIESTA = 1569720582474571806
-ID_CANALE_STAFF = 1569720781443829761
+ID_CANALE_STAFF = 1569720656541515866  # <-- ID CORRETTO AGGIORNATO
 ID_CANALE_FORUM = 1569721095345405993
 
 # ==========================================
@@ -61,7 +61,7 @@ class VistaStaffDecisione(discord.ui.View):
             except Exception as e:
                 print(f"Errore assegnazione ruolo: {e}")
 
-        # 2. Solo DOPO l'approvazione crea il post nel FORUM
+        # 2. Crea il post nel Forum dopo l'approvazione
         canale_forum = guild.get_channel(ID_CANALE_FORUM)
         if canale_forum and isinstance(canale_forum, discord.ForumChannel):
             try:
@@ -146,7 +146,7 @@ class VistaStaffDecisione(discord.ui.View):
         await interaction.response.send_message("Richiesta rifiutata.", ephemeral=True)
 
 # ==========================================
-# 4. MODULO CON PIÙ CAMPI & VISTA REGISTRAZIONE
+# 4. MODULO CON I CAMPI RICHIESTI
 # ==========================================
 class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"):
     nome_ic = discord.ui.TextInput(
@@ -172,7 +172,7 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
 
     storia = discord.ui.TextInput(
         label="Origine / Storia in breve del personaggio",
-        placeholder="Descrivi brevemente chi è il tuo personaggio e i suoi scopi...",
+        placeholder="Descrivi brevemente chi è il tuo personaggio...",
         style=discord.TextStyle.paragraph,
         required=True,
         max_length=500
@@ -186,7 +186,7 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
 
         guild = interaction.guild
 
-        # Invio della richiesta ESCLUSIVAMENTE nel canale STAFF per l'approvazione
+        # Invio della richiesta nel canale STAFF corretto
         canale_staff = guild.get_channel(ID_CANALE_STAFF)
         if canale_staff:
             embed_staff = discord.Embed(
@@ -210,6 +210,8 @@ class ModuloCittadinanza(discord.ui.Modal, title="🪪 Registrazione Passaporto"
                 storia=self.storia.value
             )
             await canale_staff.send(embed=embed_staff, view=view)
+        else:
+            print(f"❌ ERRORE: Impossibile trovare il canale staff con ID {ID_CANALE_STAFF}")
 
 class VistaCittadinanza(discord.ui.View):
     def __init__(self):
