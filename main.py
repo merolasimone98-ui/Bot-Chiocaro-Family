@@ -249,44 +249,53 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 ID_CANALE_CONTO_BANCARIO = 1569833371176276070
-ID_RUOLO_STAFF = 1569773078097960960  # Il ruolo staff che abbiamo usato anche per i comandi vocali
+ID_RUOLO_STAFF = 1569773078097960960
 
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL, sslmode='require')
+    # Connessione rapida con timeout ridotto
+    return psycopg2.connect(DATABASE_URL, sslmode='require', connect_timeout=5)
 
-# --- GESTIONE DATABASE UNIFICATA ---
+# --- FUNZIONI DATABASE OTTIMIZZATE ---
 def get_account(user_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT cash, bank, account_open FROM economy WHERE user_id = %s", (user_id,))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    if row:
-        return {"cash": float(row[0]), "bank": float(row[1]), "open": row[2]}
-    return None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT cash, bank, account_open FROM economy WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            return {"cash": float(row[0]), "bank": float(row[1]), "open": row[2]}
+        return None
+    except Exception as e:
+        print(f"Errore DB get_account: {e}")
+        return None
 
 def create_account(user_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    # Controlla se esiste già
-    cur.execute("SELECT user_id FROM economy WHERE user_id = %s", (user_id,))
-    if not cur.fetchone():
-        # 1500 di contanti iniziali alla creazione del conto
-        cur.execute("INSERT INTO economy (user_id, cash, bank, account_open) VALUES (%s, 1500.0, 0.0, TRUE)", (user_id,))
-    else:
-        cur.execute("UPDATE economy SET account_open = TRUE WHERE user_id = %s", (user_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT user_id FROM economy WHERE user_id = %s", (user_id,))
+        if not cur.fetchone():
+            cur.execute("INSERT INTO economy (user_id, cash, bank, account_open) VALUES (%s, 1500.0, 0.0, TRUE)", (user_id,))
+        else:
+            cur.execute("UPDATE economy SET account_open = TRUE WHERE user_id = %s", (user_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Errore DB create_account: {e}")
 
 def update_balances(user_id, cash, bank):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE economy SET cash = %s, bank = %s WHERE user_id = %s", (cash, bank, user_id))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE economy SET cash = %s, bank = %s WHERE user_id = %s", (cash, bank, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Errore DB update_balances: {e}")
 
 # --- MODALE PER APERTURA CONTO ---
 class ModalAperturaConto(discord.ui.Modal, title="Banca Centrale - Apertura Conto"):
@@ -298,11 +307,14 @@ class ModalAperturaConto(discord.ui.Modal, title="Banca Centrale - Apertura Cont
     )
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Rispondiamo SUBITO per evitare il timeout di Discord
+        await interaction.response.defer(ephemeral=True)
+        
         user_id = interaction.user.id
         account = get_account(user_id)
         
         if account and account["open"]:
-            await interaction.response.send_message("❌ Hai già un conto bancario attivo!", ephemeral=True)
+            await interaction.followup.send("❌ Hai già un conto bancario attivo!", ephemeral=True)
             return
 
         create_account(user_id)
@@ -315,7 +327,7 @@ class ModalAperturaConto(discord.ui.Modal, title="Banca Centrale - Apertura Cont
         embed.add_field(name="💵 Contanti", value="€1,500.00", inline=True)
         embed.add_field(name="🏦 Banca", value="€0.00", inline=True)
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 # --- VIEW CON IL PULSANTE PER APRIRE IL CONTO ---
 class ViewPannelloBanca(discord.ui.View):
@@ -324,16 +336,12 @@ class ViewPannelloBanca(discord.ui.View):
 
     @discord.ui.button(label="💳 Apri Conto Bancario", style=discord.ButtonStyle.green, custom_id="btn_apri_conto")
     async def apri_conto(self, interaction: discord.Interaction, button: discord.ui.Button):
-        account = get_account(interaction.user.id)
-        if account and account["open"]:
-            await interaction.response.send_message("❌ Hai già un conto bancario attivo!", ephemeral=True)
-            return
+        # Inviamo subito il modale senza bloccare l'interazione
         await interaction.response.send_modal(ModalAperturaConto())
 
 @bot.event
 async def on_ready():
     print(f"Bot online come {bot.user}")
-    # Registra la View persistente per il pannello
     bot.add_view(ViewPannelloBanca())
     try:
         synced = await bot.tree.sync()
@@ -341,7 +349,6 @@ async def on_ready():
     except Exception as e:
         print(f"Errore sincronizzazione comandi: {e}")
 
-# Comando per inviare il pannello della banca nel canale dedicato (eseguibile dallo staff)
 @bot.tree.command(name="setup_banca", description="Invia il pannello per aprire il conto bancario nel canale")
 @app_commands.checks.has_role(ID_RUOLO_STAFF)
 async def setup_banca(interaction: discord.Interaction):
@@ -363,12 +370,13 @@ async def setup_banca(interaction: discord.Interaction):
 # --- COMANDI ECONOMICI UTENTE ---
 @bot.tree.command(name="portafoglio", description="Controlla il tuo saldo in contanti e in banca")
 async def portafoglio(interaction: discord.Interaction, membro: discord.Member = None):
+    await interaction.response.defer(ephemeral=True)
     target = membro or interaction.user
     account = get_account(target.id)
     
     if not account or not account["open"]:
-        msg = f"❌ {target.mention} non ha ancora aperto un conto bancario! Deve farlo nel canale dedicato." if membro else "❌ Non hai ancora un conto bancario attivo! Aprilo nel canale della banca."
-        await interaction.response.send_message(msg, ephemeral=True)
+        msg = f"❌ {target.mention} non ha ancora aperto un conto bancario!" if membro else "❌ Non hai ancora un conto bancario attivo! Aprilo nel canale della banca."
+        await interaction.followup.send(msg, ephemeral=True)
         return
     
     embed = discord.Embed(
@@ -379,7 +387,7 @@ async def portafoglio(interaction: discord.Interaction, membro: discord.Member =
     embed.add_field(name="🏦 Banca", value=f"€{account['bank']:,.2f}", inline=True)
     embed.add_field(name="💰 Patrimonio Totale", value=f"€{(account['cash'] + account['bank']):,.2f}", inline=False)
     
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="deposita", description="Deposita i contanti in banca")
 async def deposita(interaction: discord.Interaction, importo: float):
@@ -387,20 +395,21 @@ async def deposita(interaction: discord.Interaction, importo: float):
         await interaction.response.send_message("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
         return
         
+    await interaction.response.defer(ephemeral=True)
     account = get_account(interaction.user.id)
     if not account or not account["open"]:
-        await interaction.response.send_message("❌ Devi prima aprire un conto bancario!", ephemeral=True)
+        await interaction.followup.send("❌ Devi prima aprire un conto bancario!", ephemeral=True)
         return
         
     if account["cash"] < importo:
-        await interaction.response.send_message("❌ Non hai abbastanza contanti con te!", ephemeral=True)
+        await interaction.followup.send("❌ Non hai abbastanza contanti con te!", ephemeral=True)
         return
         
     account["cash"] -= importo
     account["bank"] += importo
     update_balances(interaction.user.id, account["cash"], account["bank"])
     
-    await interaction.response.send_message(f"✅ Hai depositato **€{importo:,.2f}** in banca.\n💵 Contanti rimanenti: €{account['cash']:,.2f}\n🏦 Banca: €{account['bank']:,.2f}", ephemeral=True)
+    await interaction.followup.send(f"✅ Hai depositato **€{importo:,.2f}** in banca.\n💵 Contanti rimanenti: €{account['cash']:,.2f}\n🏦 Banca: €{account['bank']:,.2f}", ephemeral=True)
 
 @bot.tree.command(name="preleva", description="Preleva denaro dalla banca in contanti")
 async def preleva(interaction: discord.Interaction, importo: float):
@@ -408,20 +417,21 @@ async def preleva(interaction: discord.Interaction, importo: float):
         await interaction.response.send_message("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
         return
         
+    await interaction.response.defer(ephemeral=True)
     account = get_account(interaction.user.id)
     if not account or not account["open"]:
-        await interaction.response.send_message("❌ Devi prima aprire un conto bancario!", ephemeral=True)
+        await interaction.followup.send("❌ Devi prima aprire un conto bancario!", ephemeral=True)
         return
         
     if account["bank"] < importo:
-        await interaction.response.send_message("❌ Non hai abbastanza fondi in banca!", ephemeral=True)
+        await interaction.followup.send("❌ Non hai abbastanza fondi in banca!", ephemeral=True)
         return
         
     account["bank"] -= importo
     account["cash"] += importo
     update_balances(interaction.user.id, account["cash"], account["bank"])
     
-    await interaction.response.send_message(f"✅ Hai prelevato **€{importo:,.2f}**.\n💵 Contanti: €{account['cash']:,.2f}\n🏦 Banca rimanente: €{account['bank']:,.2f}", ephemeral=True)
+    await interaction.followup.send(f"✅ Hai prelevato **€{importo:,.2f}**.\n💵 Contanti: €{account['cash']:,.2f}\n🏦 Banca rimanente: €{account['bank']:,.2f}", ephemeral=True)
 
 @bot.tree.command(name="paga", description="Paga dei contanti a un altro utente")
 async def paga(interaction: discord.Interaction, destinatario: discord.Member, importo: float):
@@ -432,18 +442,19 @@ async def paga(interaction: discord.Interaction, destinatario: discord.Member, i
         await interaction.response.send_message("❌ Non puoi pagare te stesso!", ephemeral=True)
         return
         
+    await interaction.response.defer(ephemeral=True)
     acc_mittente = get_account(interaction.user.id)
     acc_dest = get_account(destinatario.id)
     
     if not acc_mittente or not acc_mittente["open"]:
-        await interaction.response.send_message("❌ Devi prima aprire un conto bancario!", ephemeral=True)
+        await interaction.followup.send("❌ Devi prima aprire un conto bancario!", ephemeral=True)
         return
     if not acc_dest or not acc_dest["open"]:
-        await interaction.response.send_message("❌ Il destinatario non ha un conto bancario attivo!", ephemeral=True)
+        await interaction.followup.send("❌ Il destinatario non ha un conto bancario attivo!", ephemeral=True)
         return
         
     if acc_mittente["cash"] < importo:
-        await interaction.response.send_message("❌ Non hai abbastanza contanti!", ephemeral=True)
+        await interaction.followup.send("❌ Non hai abbastanza contanti!", ephemeral=True)
         return
         
     acc_mittente["cash"] -= importo
@@ -452,7 +463,7 @@ async def paga(interaction: discord.Interaction, destinatario: discord.Member, i
     update_balances(interaction.user.id, acc_mittente["cash"], acc_mittente["bank"])
     update_balances(destinatario.id, acc_dest["cash"], acc_dest["bank"])
     
-    await interaction.response.send_message(f"✅ Hai pagato **€{importo:,.2f}** a {destinatario.mention}.", ephemeral=True)
+    await interaction.followup.send(f"✅ Hai pagato **€{importo:,.2f}** a {destinatario.mention}.", ephemeral=True)
 
 @bot.tree.command(name="bonifico", description="Effettua un bonifico bancario a un altro utente")
 async def bonifico(interaction: discord.Interaction, destinatario: discord.Member, importo: float):
@@ -463,18 +474,19 @@ async def bonifico(interaction: discord.Interaction, destinatario: discord.Membe
         await interaction.response.send_message("❌ Non puoi fare un bonifico a te stesso!", ephemeral=True)
         return
         
+    await interaction.response.defer(ephemeral=True)
     acc_mittente = get_account(interaction.user.id)
     acc_dest = get_account(destinatario.id)
     
     if not acc_mittente or not acc_mittente["open"]:
-        await interaction.response.send_message("❌ Devi prima aprire un conto bancario!", ephemeral=True)
+        await interaction.followup.send("❌ Devi prima aprire un conto bancario!", ephemeral=True)
         return
     if not acc_dest or not acc_dest["open"]:
-        await interaction.response.send_message("❌ Il destinatario non ha un conto bancario attivo!", ephemeral=True)
+        await interaction.followup.send("❌ Il destinatario non ha un conto bancario attivo!", ephemeral=True)
         return
         
     if acc_mittente["bank"] < importo:
-        await interaction.response.send_message("❌ Non hai abbastanza fondi in banca per il bonifico!", ephemeral=True)
+        await interaction.followup.send("❌ Non hai abbastanza fondi in banca per il bonifico!", ephemeral=True)
         return
         
     acc_mittente["bank"] -= importo
@@ -483,15 +495,16 @@ async def bonifico(interaction: discord.Interaction, destinatario: discord.Membe
     update_balances(interaction.user.id, acc_mittente["cash"], acc_mittente["bank"])
     update_balances(destinatario.id, acc_dest["cash"], acc_dest["bank"])
     
-    await interaction.response.send_message(f"✅ Bonifico di **€{importo:,.2f}** effettuato con successo a {destinatario.mention}.", ephemeral=True)
+    await interaction.followup.send(f"✅ Bonifico di **€{importo:,.2f}** effettuato con successo a {destinatario.mention}.", ephemeral=True)
 
-# --- COMANDI STAFF (Stipendi / Multe) ---
+# --- COMANDI STAFF ---
 @bot.tree.command(name="aggiungi_soldi", description="[STAFF] Aggiunge denaro al conto o contanti di un utente")
 @app_commands.checks.has_role(ID_RUOLO_STAFF)
 async def aggiungi_soldi(interaction: discord.Interaction, destinatario: discord.Member, importo: float, conto: str = "banca"):
+    await interaction.response.defer(ephemeral=True)
     acc = get_account(destinatario.id)
     if not acc or not acc["open"]:
-        await interaction.response.send_message("❌ L'utente non ha un conto bancario attivo.", ephemeral=True)
+        await interaction.followup.send("❌ L'utente non ha un conto bancario attivo.", ephemeral=True)
         return
         
     if conto.lower() == "contanti":
@@ -500,29 +513,30 @@ async def aggiungi_soldi(interaction: discord.Interaction, destinatario: discord
         acc["bank"] += importo
         
     update_balances(destinatario.id, acc["cash"], acc["bank"])
-    await interaction.response.send_message(f"✅ Aggiunti **€{importo:,.2f}** ({conto}) a {destinatario.mention}.", ephemeral=True)
+    await interaction.followup.send(f"✅ Aggiunti **€{importo:,.2f}** ({conto}) a {destinatario.mention}.", ephemeral=True)
 
 @bot.tree.command(name="rimuovi_soldi", description="[STAFF / MULTE] Rimuove denaro a un utente")
 @app_commands.checks.has_role(ID_RUOLO_STAFF)
 async def rimuovi_soldi(interaction: discord.Interaction, destinatario: discord.Member, importo: float, conto: str = "contanti"):
+    await interaction.response.defer(ephemeral=True)
     acc = get_account(destinatario.id)
     if not acc or not acc["open"]:
-        await interaction.response.send_message("❌ L'utente non ha un conto bancario attivo.", ephemeral=True)
+        await interaction.followup.send("❌ L'utente non ha un conto bancario attivo.", ephemeral=True)
         return
         
     if conto.lower() == "banca":
         if acc["bank"] < importo:
-            await interaction.response.send_message("❌ L'utente non ha abbastanza soldi in banca.", ephemeral=True)
+            await interaction.followup.send("❌ L'utente non ha abbastanza soldi in banca.", ephemeral=True)
             return
         acc["bank"] -= importo
     else:
         if acc["cash"] < importo:
-            await interaction.response.send_message("❌ L'utente non ha abbastanza contanti.", ephemeral=True)
+            await interaction.followup.send("❌ L'utente non ha abbastanza contanti.", ephemeral=True)
             return
         acc["cash"] -= importo
         
     update_balances(destinatario.id, acc["cash"], acc["bank"])
-    await interaction.response.send_message(f"✅ Rimossi **€{importo:,.2f}** ({conto}) a {destinatario.mention} (Multa/Sanzione).", ephemeral=True)
+    await interaction.followup.send(f"✅ Rimossi **€{importo:,.2f}** ({conto}) a {destinatario.mention}.", ephemeral=True)
 
 # ==========================================
 # 4. SISTEMA FAMIGLIA CHIOCARO
