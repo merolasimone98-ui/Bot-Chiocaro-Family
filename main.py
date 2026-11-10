@@ -98,7 +98,7 @@ ID_RUOLO_MEMBRO_LIFARDO = 1569496594892595210
 
 
 # ==========================================
-# 3. GESTIONE DATABASE ECONOMIA (SUPABASE)
+# 3. GESTIONE DATABASE ECONOMIA (SUPABASE) - PROTETTA
 # ==========================================
 
 def get_db_connection():
@@ -107,9 +107,9 @@ def get_db_connection():
     return conn
 
 def get_or_create_user_account(user_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
+        conn = get_db_connection()
+        cur = conn.cursor()
         cur.execute("SELECT cash, bank, account_open FROM economy WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         
@@ -125,24 +125,24 @@ def get_or_create_user_account(user_id):
                 cur.execute("UPDATE economy SET account_open = TRUE WHERE user_id = %s", (user_id,))
                 account_open = True
                 
+        cur.close()
+        conn.close()
         return {"cash": cash, "bank": bank, "open": account_open}
     except Exception as e:
-        print(f"Errore database: {e}")
-        return {"cash": 1500.0, "bank": 0.0, "open": True}
-    finally:
-        cur.close()
-        conn.close()
+        print(f"ERRORE DATABASE (get_or_create): {e}")
+        return None
 
 def save_user_balances(user_id, cash, bank):
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
+        conn = get_db_connection()
+        cur = conn.cursor()
         cur.execute("UPDATE economy SET cash = %s, bank = %s WHERE user_id = %s", (cash, bank, user_id))
-    except Exception as e:
-        print(f"Errore salvataggio saldi: {e}")
-    finally:
         cur.close()
         conn.close()
+        return True
+    except Exception as e:
+        print(f"ERRORE DATABASE (save): {e}")
+        return False
 
 
 # ==========================================
@@ -159,7 +159,11 @@ class ModalAperturaConto(discord.ui.Modal, title="Banca Centrale - Apertura Cont
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        
         account = get_or_create_user_account(interaction.user.id)
+        if not account:
+            await interaction.followup.send("❌ Errore di connessione al database. Riprova tra poco.", ephemeral=True)
+            return
         
         embed = discord.Embed(
             title="🏦 Conto Bancario Aperto con Successo!",
@@ -218,6 +222,10 @@ async def portafoglio(interaction: discord.Interaction, membro: discord.Member =
     target = membro or interaction.user
     account = get_or_create_user_account(target.id)
     
+    if not account:
+        await interaction.followup.send("❌ Errore di connessione al database.", ephemeral=True)
+        return
+
     embed = discord.Embed(
         title=f"💳 Portafoglio di {target.display_name}",
         color=discord.Color.gold()
@@ -237,15 +245,21 @@ async def deposita(interaction: discord.Interaction, importo: float):
     await interaction.response.defer(ephemeral=True)
     account = get_or_create_user_account(interaction.user.id)
     
+    if not account:
+        await interaction.followup.send("❌ Errore di connessione al database.", ephemeral=True)
+        return
+
     if account["cash"] < importo:
         await interaction.followup.send("❌ Non hai abbastanza contanti con te!", ephemeral=True)
         return
         
     account["cash"] -= importo
     account["bank"] += importo
-    save_user_balances(interaction.user.id, account["cash"], account["bank"])
     
-    await interaction.followup.send(f"✅ Hai depositato **€{importo:,.2f}** in banca.\n💵 Contanti rimanenti: €{account['cash']:,.2f}\n🏦 Banca: €{account['bank']:,.2f}", ephemeral=True)
+    if save_user_balances(interaction.user.id, account["cash"], account["bank"]):
+        await interaction.followup.send(f"✅ Hai depositato **€{importo:,.2f}** in banca.\n💵 Contanti rimanenti: €{account['cash']:,.2f}\n🏦 Banca: €{account['bank']:,.2f}", ephemeral=True)
+    else:
+        await interaction.followup.send("❌ Errore durante il salvataggio sul database.", ephemeral=True)
 
 @bot.tree.command(name="preleva", description="Preleva denaro dalla banca in contanti")
 async def preleva(interaction: discord.Interaction, importo: float):
@@ -256,15 +270,21 @@ async def preleva(interaction: discord.Interaction, importo: float):
     await interaction.response.defer(ephemeral=True)
     account = get_or_create_user_account(interaction.user.id)
     
+    if not account:
+        await interaction.followup.send("❌ Errore di connessione al database.", ephemeral=True)
+        return
+
     if account["bank"] < importo:
         await interaction.followup.send("❌ Non hai abbastanza fondi in banca!", ephemeral=True)
         return
         
     account["bank"] -= importo
     account["cash"] += importo
-    save_user_balances(interaction.user.id, account["cash"], account["bank"])
     
-    await interaction.followup.send(f"✅ Hai prelevato **€{importo:,.2f}**.\n💵 Contanti: €{account['cash']:,.2f}\n🏦 Banca rimanente: €{account['bank']:,.2f}", ephemeral=True)
+    if save_user_balances(interaction.user.id, account["cash"], account["bank"]):
+        await interaction.followup.send(f"✅ Hai prelevato **€{importo:,.2f}**.\n💵 Contanti: €{account['cash']:,.2f}\n🏦 Banca rimanente: €{account['bank']:,.2f}", ephemeral=True)
+    else:
+        await interaction.followup.send("❌ Errore durante il salvataggio sul database.", ephemeral=True)
 
 @bot.tree.command(name="paga", description="Paga dei contanti a un altro utente")
 async def paga(interaction: discord.Interaction, destinatario: discord.Member, importo: float):
@@ -279,6 +299,10 @@ async def paga(interaction: discord.Interaction, destinatario: discord.Member, i
     acc_mittente = get_or_create_user_account(interaction.user.id)
     acc_dest = get_or_create_user_account(destinatario.id)
     
+    if not acc_mittente or not acc_dest:
+        await interaction.followup.send("❌ Errore di connessione al database.", ephemeral=True)
+        return
+
     if acc_mittente["cash"] < importo:
         await interaction.followup.send("❌ Non hai abbastanza contanti!", ephemeral=True)
         return
@@ -304,6 +328,10 @@ async def bonifico(interaction: discord.Interaction, destinatario: discord.Membe
     acc_mittente = get_or_create_user_account(interaction.user.id)
     acc_dest = get_or_create_user_account(destinatario.id)
     
+    if not acc_mittente or not acc_dest:
+        await interaction.followup.send("❌ Errore di connessione al database.", ephemeral=True)
+        return
+
     if acc_mittente["bank"] < importo:
         await interaction.followup.send("❌ Non hai abbastanza fondi in banca per il bonifico!", ephemeral=True)
         return
@@ -322,6 +350,9 @@ async def bonifico(interaction: discord.Interaction, destinatario: discord.Membe
 async def aggiungi_soldi(interaction: discord.Interaction, destinatario: discord.Member, importo: float, conto: str = "banca"):
     await interaction.response.defer(ephemeral=True)
     acc = get_or_create_user_account(destinatario.id)
+    if not acc:
+        await interaction.followup.send("❌ Errore di connessione al database.", ephemeral=True)
+        return
         
     if conto.lower() == "contanti":
         acc["cash"] += importo
@@ -336,6 +367,9 @@ async def aggiungi_soldi(interaction: discord.Interaction, destinatario: discord
 async def rimuovi_soldi(interaction: discord.Interaction, destinatario: discord.Member, importo: float, conto: str = "contanti"):
     await interaction.response.defer(ephemeral=True)
     acc = get_or_create_user_account(destinatario.id)
+    if not acc:
+        await interaction.followup.send("❌ Errore di connessione al database.", ephemeral=True)
+        return
         
     if conto.lower() == "banca":
         if acc["bank"] < importo:
@@ -350,6 +384,7 @@ async def rimuovi_soldi(interaction: discord.Interaction, destinatario: discord.
         
     save_user_balances(destinatario.id, acc["cash"], acc["bank"])
     await interaction.followup.send(f"✅ Rimossi **€{importo:,.2f}** ({conto}) a {destinatario.mention}.", ephemeral=True)
+
 
 # ==========================================
 # 3. SISTEMA CITTADINANZA
