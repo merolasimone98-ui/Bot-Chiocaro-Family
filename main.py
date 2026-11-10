@@ -1,10 +1,14 @@
 import os
-import random
+import json
+import asyncio
+import datetime
+import time 
+from flask import Flask
 from threading import Thread
+
 import discord
 from discord import app_commands
-from discord.ext import commands
-from flask import Flask
+from discord.ext import commands, tasks
 
 # ==========================================
 # 1. CONFIGURAZIONE SERVER FLASK (RENDER FREE)
