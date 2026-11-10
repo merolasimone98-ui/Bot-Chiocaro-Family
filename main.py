@@ -240,42 +240,64 @@ class VistaCittadinanza(discord.ui.View):
             return
         await interaction.response.send_modal(ModuloCittadinanza())
 
-# Connessione al database PostgreSQL di Supabase
+# Configurazione del bot (mantieni la tua configurazione esistente dei intents)
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+intents.voice_states = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Connessione al database PostgreSQL (Supabase)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    return conn
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
-# Funzione per ottenere o creare l'account utente (con 1500 di default)
+# Funzioni di gestione database ottimizzate
 def get_or_create_account(user_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT cash, bank FROM economy WHERE user_id = %s", (user_id,))
-    account = cur.fetchone()
-    
-    if not account:
-        # Se l'utente non esiste, lo crea con 1500 in contanti e 0 in banca
-        cur.execute("INSERT INTO economy (user_id, cash, bank) VALUES (%s, 1500, 0)", (user_id,))
-        conn.commit()
-        cash, bank = 1500, 0
-    else:
-        cash, bank = account
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT cash, bank FROM economy WHERE user_id = %s", (user_id,))
+        account = cur.fetchone()
         
-    cur.close()
-    conn.close()
-    return cash, bank
+        if not account:
+            cur.execute("INSERT INTO economy (user_id, cash, bank) VALUES (%s, 1500, 0)", (user_id,))
+            conn.commit()
+            cash, bank = 1500.0, 0.0
+        else:
+            cash, bank = float(account[0]), float(account[1])
+            
+        cur.close()
+        conn.close()
+        return cash, bank
+    except Exception as e:
+        print(f"Errore database: {e}")
+        return 1500.0, 0.0
 
 def update_balances(user_id, cash, bank):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE economy SET cash = %s, bank = %s WHERE user_id = %s", (cash, bank, user_id))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE economy SET cash = %s, bank = %s WHERE user_id = %s", (cash, bank, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Errore aggiornamento database: {e}")
+
+@bot.event
+async def on_ready():
+    print(f"Bot online come {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Sincronizzati {len(synced)} comandi slash.")
+    except Exception as e:
+        print(f"Errore sincronizzazione comandi: {e}")
 
 # ==========================================
-# COMANDI DI ECONOMIA
+# COMANDI ECONOMICI
 # ==========================================
 
 @bot.tree.command(name="portafoglio", description="Controlla il tuo saldo in contanti e in banca")
@@ -347,7 +369,6 @@ async def paga(interaction: discord.Interaction, destinatario: discord.Member, i
         
     cash_destinario, bank_destinario = get_or_create_account(destinatario.id)
     
-    # Aggiorna i saldi
     cash_mittente -= importo
     cash_destinario += importo
     
@@ -374,7 +395,6 @@ async def bonifico(interaction: discord.Interaction, destinatario: discord.Membe
         
     cash_destinario, bank_destinario = get_or_create_account(destinatario.id)
     
-    # Aggiorna i saldi (sposta dalla banca del mittente alla banca del destinatario)
     bank_mittente -= importo
     bank_destinario += importo
     
