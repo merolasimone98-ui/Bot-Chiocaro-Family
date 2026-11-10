@@ -244,6 +244,7 @@ class VistaCittadinanza(discord.ui.View):
 async def on_ready():
   print(f"🔥 Bot online come: {bot.user.name} ({bot.user.id})")
 
+  # Mantieni attivo il bottone perenne
   bot.add_view(VistaCittadinanza())
 
   try:
@@ -252,7 +253,7 @@ async def on_ready():
   except Exception as e:
     print(f"❌ Errore sincronizzazione comandi: {e}")
 
-  # Invio automatico del regolamento
+  # 1. Invio automatico del REGOLAMENTO
   canale_regole = bot.get_channel(ID_CANALE_REGOLAMENTO)
   if canale_regole:
     async for msg in canale_regole.history(limit=10):
@@ -305,6 +306,34 @@ async def on_ready():
           )
       )
       await canale_regole.send(embed=embed_regole)
+
+  # 2. Invio automatico del PANNELLO CITTADINANZA
+  canale_cittadinanza = bot.get_channel(ID_CANALE_RICHIESTA)
+  if canale_cittadinanza:
+    async for msg in canale_cittadinanza.history(limit=10):
+      if msg.author == bot.user:
+        print("ℹ️ Pannello cittadinanza già inviato.")
+        break
+    else:
+      embed_cittadinanza = discord.Embed(
+          title="🪪 ── UFFICIO ANAGRAFE E CITTADINANZA ── 🏛️",
+          description=(
+              "Benvenuto nell'ufficio immigrazione e registrazione delle"
+              " Famiglie.\n\nPer registrarti ufficialmente, ottenere i tuoi"
+              " documenti ed accedere a tutti i canali della città, clicca sul"
+              " pulsante verde qui sotto e inserisci i tuoi dati In-Game!\n\n⚠️"
+              " *Inserisci il Nome e Cognome del tuo personaggio Roleplay.*"
+          ),
+          color=discord.Color.blue(),
+      )
+      embed_cittadinanza.set_footer(
+          text="Sistema di Registrazione Automatica • Chiocaro Bot 🤌"
+      )
+
+      await canale_cittadinanza.send(
+          embed=embed_cittadinanza, view=VistaCittadinanza()
+      )
+      print("✅ Pannello cittadinanza inviato in automatico!")
 
 
 # ==========================================
