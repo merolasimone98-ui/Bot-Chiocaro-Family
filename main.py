@@ -23,9 +23,21 @@ def keep_alive():
     thread = Thread(target=run_flask)
     thread.start()
 
+# Avvia il server Flask per mantenere il bot attivo su Render
+keep_alive()
+
 # ==========================================
 # 2. INIZIALIZZAZIONE BOT DISCORD & ID
 # ==========================================
+
+intents = discord.Intents.all()
+intents.message_content = True
+intents.members = True
+intents.voice_states = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 ID_RUOLO_PORTO_DARMI = 1569836896312631356
 ID_RUOLO_STAFF = 1569794230262693889
@@ -43,15 +55,16 @@ ID_RUOLO_PATENTI = {
 
 ID_FORUM_IMMATRICOLAZIONI = 1569837669905727660
 
-ID_CANALE_COMANDO_RECENSIONI = 1569837763459555440  # Sostituisci con l'ID del canale recensioni
-ID_CANALE_LOG_RECENSIONI = 1569838024596922619     # Canale Forum Recensioni
+ID_CANALE_COMANDO_RECENSIONI = 1569837763459555440  
+ID_CANALE_LOG_RECENSIONI = 1569838024596922619     
 LINK_IMMAGINE_RECENSIONE = "https://media.discordapp.net/attachments/1569724333704749107/1569838608347828304/Gemini_Generated_Image_jr98vmjr98vmjr98.jpg?ex=6af4e9a2&is=6af39822&hm=c9feb0602fe27105147d1f140d1ee0613abc4d8ba668d5f1880b684761e15503&=&format=webp"
 
 ID_CANALE_REGISTRO_ARRESTI = 1569838174342221825
 ID_CANALE_REGISTRO_MULTE = 1569838254247641128
 ID_CANALE_CONTO_BANCARIO = 1569833371176276070
-ID_CANALE_LOG_DOCUMENTI = 1569721095345405993  # Canale Accettazione / Log Documenti
-ID_FORUM_DOCUMENTI = 1562891782415450183 
+ID_CANALE_LOG_DOCUMENTI = 1569721095345405993  
+ID_FORUM_DOCUMENTI = 1562891782415450183  
+
 # ID CITTADINANZA & GENERALI
 ID_CANALE_REGOLAMENTO = 1569483884465225861
 ID_RUOLO_CITTADINO = 1569719339198845112
@@ -83,25 +96,17 @@ ID_CANALE_ANNUNCI_LIFARDO = 1569747095173333002
 ID_RUOLO_STAFF_LIFARDO = 1569496579218341958
 ID_RUOLO_MEMBRO_LIFARDO = 1569496594892595210
 
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.voice_states = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-ID_CANALE_CONTO_BANCARIO = 1569833371176276070
-ID_RUOLO_STAFF = 1569773078097960960
+# ==========================================
+# 3. GESTIONE DATABASE ECONOMIA (SUPABASE)
+# ==========================================
 
 def get_db_connection():
-    # Connessione pulita con autocommit abilitato per evitare problemi di salvataggio
     conn = psycopg2.connect(DATABASE_URL, sslmode='require', connect_timeout=5)
     conn.autocommit = True
     return conn
 
 def get_or_create_user_account(user_id):
-    """Legge o crea l'account garantendo dati sempre sincronizzati con Supabase."""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -129,7 +134,6 @@ def get_or_create_user_account(user_id):
         conn.close()
 
 def save_user_balances(user_id, cash, bank):
-    """Scrive i nuovi saldi direttamente su Supabase."""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -139,6 +143,11 @@ def save_user_balances(user_id, cash, bank):
     finally:
         cur.close()
         conn.close()
+
+
+# ==========================================
+# 4. INTERFACCE UI (PULSANTI E MODAL)
+# ==========================================
 
 class ModalAperturaConto(discord.ui.Modal, title="Banca Centrale - Apertura Conto"):
     nome_cognome = discord.ui.TextInput(
@@ -170,15 +179,20 @@ class ViewPannelloBanca(discord.ui.View):
     async def apri_conto(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ModalAperturaConto())
 
+
+# ==========================================
+# 5. EVENTI E COMANDI DEL BOT
+# ==========================================
+
 @bot.event
 async def on_ready():
     print(f"Bot online come {bot.user}")
     bot.add_view(ViewPannelloBanca())
     try:
         synced = await bot.tree.sync()
-        print(f"Sincronizzati {len(synced)} comandi.")
+        print(f"Sincronizzati {len(synced)} comandi slash.")
     except Exception as e:
-        print(f"Errore sync: {e}")
+        print(f"Errore sincronizzazione comandi: {e}")
 
 @bot.tree.command(name="setup_banca", description="Invia il pannello per aprire il conto bancario nel canale")
 @app_commands.checks.has_role(ID_RUOLO_STAFF)
@@ -302,6 +316,7 @@ async def bonifico(interaction: discord.Interaction, destinatario: discord.Membe
     
     await interaction.followup.send(f"✅ Bonifico di **€{importo:,.2f}** effettuato con successo a {destinatario.mention}.", ephemeral=True)
 
+# Comandi Staff
 @bot.tree.command(name="aggiungi_soldi", description="[STAFF] Aggiunge denaro al conto o contanti di un utente")
 @app_commands.checks.has_role(ID_RUOLO_STAFF)
 async def aggiungi_soldi(interaction: discord.Interaction, destinatario: discord.Member, importo: float, conto: str = "banca"):
@@ -334,7 +349,8 @@ async def rimuovi_soldi(interaction: discord.Interaction, destinatario: discord.
         acc["cash"] -= importo
         
     save_user_balances(destinatario.id, acc["cash"], acc["bank"])
-    await interaction.followup.send(f>✅ Rimossi **€{importo:,.2f}** ({conto}) a {destinatario.mention}.", ephemeral=True)
+    await interaction.followup.send(f"✅ Rimossi **€{importo:,.2f}** ({conto}) a {destinatario.mention}.", ephemeral=True)
+
 # ==========================================
 # 3. SISTEMA CITTADINANZA
 # ==========================================
