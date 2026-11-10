@@ -5,6 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from flask import Flask
+import psycopg2
 
 # ==========================================
 # 1. CONFIGURAZIONE SERVER FLASK (RENDER FREE)
@@ -239,77 +240,148 @@ class VistaCittadinanza(discord.ui.View):
             return
         await interaction.response.send_modal(ModuloCittadinanza())
 
+# Connessione al database PostgreSQL di Supabase
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def get_db_connection():
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    return conn
+
+# Funzione per ottenere o creare l'account utente (con 1500 di default)
+def get_or_create_account(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT cash, bank FROM economy WHERE user_id = %s", (user_id,))
+    account = cur.fetchone()
+    
+    if not account:
+        # Se l'utente non esiste, lo crea con 1500 in contanti e 0 in banca
+        cur.execute("INSERT INTO economy (user_id, cash, bank) VALUES (%s, 1500, 0)", (user_id,))
+        conn.commit()
+        cash, bank = 1500, 0
+    else:
+        cash, bank = account
+        
+    cur.close()
+    conn.close()
+    return cash, bank
+
+def update_balances(user_id, cash, bank):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE economy SET cash = %s, bank = %s WHERE user_id = %s", (cash, bank, user_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
 # ==========================================
-# 🚗 MODALE RICHIESTA PATENTE
+# COMANDI DI ECONOMIA
 # ==========================================
-class ModalPatente(discord.ui.Modal, title="🚗 Richiesta Patente Puglia RP"):
-    nome_rp = discord.ui.TextInput(
-        label="👤 Nome e Cognome RP",
-        placeholder="Es. Mario Rossi",
-        required=True,
-        max_length=50
+
+@bot.tree.command(name="portafoglio", description="Controlla il tuo saldo in contanti e in banca")
+async def portafoglio(interaction: discord.Interaction, membro: discord.Member = None):
+    target = membro or interaction.user
+    cash, bank = get_or_create_account(target.id)
+    
+    embed = discord.Embed(
+        title=f"💳 Portafoglio di {target.display_name}",
+        color=discord.Color.gold()
     )
-    roblox_user = discord.ui.TextInput(
-        label="🎮 Nome Utente Roblox",
-        placeholder="Es. Player123",
-        required=True,
-        max_length=50
-    )
-    tipo_patente = discord.ui.TextInput(
-        label="🪪 Tipo di Patente (A, B, C, D)",
-        placeholder="Es. B",
-        required=True,
-        max_length=20
-    )
+    embed.add_field(name="💵 Contanti", value=f"€{cash:,.2f}", inline=True)
+    embed.add_field(name="🏦 Banca", value=f"€{bank:,.2f}", inline=True)
+    embed.add_field(name="💰 Patrimonio Totale", value=f"€{(cash + bank):,.2f}", inline=False)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+@bot.tree.command(name="deposita", description="Deposita i contanti in banca")
+async def deposita(interaction: discord.Interaction, importo: float):
+    if importo <= 0:
+        await interaction.response.send_message("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
+        return
+        
+    cash, bank = get_or_create_account(interaction.user.id)
+    
+    if cash < importo:
+        await interaction.response.send_message("❌ Non hai abbastanza contanti con te!", ephemeral=True)
+        return
+        
+    cash -= importo
+    bank += importo
+    update_balances(interaction.user.id, cash, bank)
+    
+    await interaction.response.send_message(f"✅ Hai depositato **€{importo:,.2f}** in banca.\n💵 Contanti rimanenti: €{cash:,.2f}\n🏦 Banca: €{bank:,.2f}", ephemeral=True)
 
-        # 1. Recupera il canale dei log/accettazione dello staff
-        canale_log = interaction.guild.get_channel(ID_CANALE_LOG_DOCUMENTI)
-        if not canale_log:
-            await interaction.followup.send(
-                "❌ **Errore:** Il canale di approvazione documenti non è configurato correttamente! Avvisa un Amministratore.", 
-                ephemeral=True
-            )
-            return
+@bot.tree.command(name="preleva", description="Preleva denaro dalla banca in contanti")
+async def preleva(interaction: discord.Interaction, importo: float):
+    if importo <= 0:
+        await interaction.response.send_message("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
+        return
+        
+    cash, bank = get_or_create_account(interaction.user.id)
+    
+    if bank < importo:
+        await interaction.response.send_message("❌ Non hai abbastanza fondi in banca!", ephemeral=True)
+        return
+        
+    bank -= importo
+    cash += importo
+    update_balances(interaction.user.id, cash, bank)
+    
+    await interaction.response.send_message(f"✅ Hai prelevato **€{importo:,.2f}**.\n💵 Contanti: €{cash:,.2f}\n🏦 Banca rimanente: €{bank:,.2f}", ephemeral=True)
 
-        # 2. Crea l'embed da mandare allo Staff nel canale di accettazione
-        embed_richiesta = discord.Embed(
-            title=f"🚗 RICHIESTA DOCUMENTO: {self.tipo_patente.value.strip().upper()}",
-            description=(
-                f"👤 **Cittadino:** {interaction.user.mention} (`{interaction.user.id}`)\n"
-                f"📜 **Nome RP:** `{self.nome_rp.value.strip()}`\n"
-                f"🪪 **Tipo Richiesto:** `{self.tipo_patente.value.strip()}`\n"
-                f"🎮 **Account Roblox:** `{self.roblox_user.value.strip()}`\n\n"
-                f"⏳ *In attesa di approvazione o rifiuto da parte dello Staff.*"
-            ),
-            color=discord.Color.orange(),
-            timestamp=discord.utils.utcnow()
-        )
-        embed_richiesta.set_footer(text="Puglia RP • In attesa di valutazione")
+@bot.tree.command(name="paga", description="Paga dei contanti a un altro utente")
+async def paga(interaction: discord.Interaction, destinatario: discord.Member, importo: float):
+    if importo <= 0:
+        await interaction.response.send_message("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
+        return
+        
+    if destinatario.id == interaction.user.id:
+        await interaction.response.send_message("❌ Non puoi fare un pagamento a te stesso!", ephemeral=True)
+        return
+        
+    cash_mittente, bank_mittente = get_or_create_account(interaction.user.id)
+    
+    if cash_mittente < importo:
+        await interaction.response.send_message("❌ Non hai abbastanza contanti per effettuare questo pagamento!", ephemeral=True)
+        return
+        
+    cash_destinario, bank_destinario = get_or_create_account(destinatario.id)
+    
+    # Aggiorna i saldi
+    cash_mittente -= importo
+    cash_destinario += importo
+    
+    update_balances(interaction.user.id, cash_mittente, bank_mittente)
+    update_balances(destinatario.id, cash_destinario, bank_destinario)
+    
+    await interaction.response.send_message(f"✅ Hai pagato **€{importo:,.2f}** a {destinatario.mention}.", ephemeral=True)
 
-        # 3. Collega i pulsanti della vista Documenti passando il tipo esatto (es. "Patente B")
-        view = Documenti(
-            user_id=interaction.user.id,
-            nome_rp=self.nome_rp.value.strip(),
-            roblox_user=self.roblox_user.value.strip(),
-            tipo_doc=self.tipo_patente.value.strip()  # Importante per far riconoscere se è A, B, C o D
-        )
-
-        try:
-            # 4. Invia nel canale staff con i bottoni Accetta/Rifiuta
-            await canale_log.send(embed=embed_richiesta, view=view)
-            await interaction.followup.send(
-                "✅ **Richiesta di patente inviata con successo!** È stata inoltrata allo Staff per la valutazione.", 
-                ephemeral=True
-            )
-        except Exception as e:
-            await interaction.followup.send(
-                f"❌ Impossibile inviare la richiesta nel canale staff. Errore: `{e}`", 
-                ephemeral=True
-            )
-            await interaction.followup.send(f"❌ Errore nell'invio della richiesta nel canale: `{e}`", ephemeral=True)
+@bot.tree.command(name="bonifico", description="Effettua un bonifico bancario a un altro utente")
+async def bonifico(interaction: discord.Interaction, destinatario: discord.Member, importo: float):
+    if importo <= 0:
+        await interaction.response.send_message("❌ L'importo deve essere maggiore di zero!", ephemeral=True)
+        return
+        
+    if destinatario.id == interaction.user.id:
+        await interaction.response.send_message("❌ Non puoi fare un bonifico a te stesso!", ephemeral=True)
+        return
+        
+    cash_mittente, bank_mittente = get_or_create_account(interaction.user.id)
+    
+    if bank_mittente < importo:
+        await interaction.response.send_message("❌ Non hai abbastanza fondi in banca per effettuare il bonifico!", ephemeral=True)
+        return
+        
+    cash_destinario, bank_destinario = get_or_create_account(destinatario.id)
+    
+    # Aggiorna i saldi (sposta dalla banca del mittente alla banca del destinatario)
+    bank_mittente -= importo
+    bank_destinario += importo
+    
+    update_balances(interaction.user.id, cash_mittente, bank_mittente)
+    update_balances(destinatario.id, cash_destinario, bank_destinario)
+    
+    await interaction.response.send_message(f"✅ Bonifico di **€{importo:,.2f}** effettuato con successo a {destinatario.mention}.", ephemeral=True)
 
 # ==========================================
 # 4. SISTEMA FAMIGLIA CHIOCARO
