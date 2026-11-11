@@ -274,8 +274,15 @@ class ViewPannelloPatenteC(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Richiedi Patente C", style=discord.ButtonStyle.primary, emoji="🚛", custom_id="btn_richiedi_patente_c")
+    @discord.ui.button(label="Richiedi Patente C", style=discord.ButtonStyle.primary, emoji="🚚", custom_id="btn_richiedi_patente_c")
     async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Controllo se l'utente ha già il ruolo della Patente A
+        ruolo = interaction.guild.get_role(ID_RUOLO_PATENTE_C)
+        if ruolo and ruolo in interaction.user.roles:
+            await interaction.response.send_message("❌ **Patente già attiva!** Risulti già in possesso di questo documento in città.", ephemeral=True)
+            return
+
+        # Se non ha il ruolo, apre regolarmente il modulo
         await interaction.response.send_modal(ModalRichiestaPatenteC())
 
 
@@ -421,6 +428,13 @@ class ViewPannelloPatenteD(discord.ui.View):
 
     @discord.ui.button(label="Richiedi Patente D", style=discord.ButtonStyle.primary, emoji="🚌", custom_id="btn_richiedi_patente_d")
     async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Controllo se l'utente ha già il ruolo della Patente A
+        ruolo = interaction.guild.get_role(ID_RUOLO_PATENTE_D)
+        if ruolo and ruolo in interaction.user.roles:
+            await interaction.response.send_message("❌ **Patente già attiva!** Risulti già in possesso di questo documento in città.", ephemeral=True)
+            return
+
+        # Se non ha il ruolo, apre regolarmente il modulo
         await interaction.response.send_modal(ModalRichiestaPatenteD())
 
 
@@ -609,6 +623,13 @@ class ViewPannelloPatenteA(discord.ui.View):
 
     @discord.ui.button(label="Richiedi Patente A", style=discord.ButtonStyle.primary, emoji="🏍️", custom_id="btn_richiedi_patente_a")
     async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Controllo se l'utente ha già il ruolo della Patente A
+        ruolo = interaction.guild.get_role(ID_RUOLO_PATENTE_A)
+        if ruolo and ruolo in interaction.user.roles:
+            await interaction.response.send_message("❌ **Patente già attiva!** Risulti già in possesso di questo documento in città.", ephemeral=True)
+            return
+
+        # Se non ha il ruolo, apre regolarmente il modulo
         await interaction.response.send_modal(ModalRichiestaPatenteA())
 
 
@@ -1181,7 +1202,14 @@ class ViewPannelloPatenteB(discord.ui.View):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="Richiedi Patente B", style=discord.ButtonStyle.primary, emoji="🚗", custom_id="btn_richiedi_patente_b")
-    async def richiedi_patente(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Controllo se l'utente ha già il ruolo della Patente A
+        ruolo = interaction.guild.get_role(ID_RUOLO_PATENTE_B)
+        if ruolo and ruolo in interaction.user.roles:
+            await interaction.response.send_message("❌ **Patente già attiva!** Risulti già in possesso di questo documento in città.", ephemeral=True)
+            return
+
+        # Se non ha il ruolo, apre regolarmente il modulo
         await interaction.response.send_modal(ModalRichiestaPatenteB())
 
 
