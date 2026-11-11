@@ -102,9 +102,13 @@ ID_RUOLO_MEMBRO_LIFARDO = 1569496594892595210
 # ==========================================
 
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require', connect_timeout=5)
-    conn.autocommit = True
-    return conn
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require', connect_timeout=10)
+        conn.autocommit = True
+        return conn
+    except Exception as e:
+        print(f"ERRORE CRITICO DB ESATTO: {e}")
+        return None
 
 def get_or_create_user_account(user_id):
     try:
