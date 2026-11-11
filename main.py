@@ -107,6 +107,199 @@ ID_CANALE_PANNELLO_IMMATRICOLAZIONE = 1569833054334226482
 ID_CANALE_ACCETTAZIONI_IMMATRICOLAZIONI = 1570090329304997959
 ID_FORUM_IMMATRICOLAZIONI_ACCETTATE = 1569837669905727660
 
+# --- ID SISTEMA PORTO D'ARMI ---
+ID_CANALE_PANNELLO_PORTO_ARMI = 1569832623545520300
+ID_CANALE_ACCETTAZIONI_PORTO_ARMI = 1570092906348412938
+ID_FORUM_PORTO_ARMI_ACCETTATI = 1570093039052005497
+ID_RUOLO_PORTO_ARMI = 1569836896312631356
+
+# ==========================================
+# 5. SISTEMA PORTO D'ARMI
+# ==========================================
+# Modulo motivazione rifiuto Porto d'Armi
+class ModalRifiutoPortoArmi(discord.ui.Modal, title="Motivazione Rifiuto Porto d'Armi"):
+    motivazione = discord.ui.TextInput(
+        label="Motivo del rifiuto",
+        style=discord.TextStyle.paragraph,
+        placeholder="Es. Precedenti penali, test psicologico non superato...",
+        required=True,
+        max_length=500
+    )
+
+    def __init__(self, target_user: discord.Member, nome_rp: str, messaggio_staff: discord.Message):
+        super().__init__()
+        self.target_user = target_user
+        self.nome_rp = nome_rp
+        self.messaggio_staff = messaggio_staff
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        embed_staff = self.messaggio_staff.embeds[0]
+        embed_staff.color = discord.Color.red()
+        embed_staff.set_footer(text=f"❌ RIFIUTATO da {interaction.user.display_name}")
+        embed_staff.add_field(name="📌 Motivazione Rifiuto", value=self.motivazione.value, inline=False)
+        await self.messaggio_staff.edit(embed=embed_staff, view=None)
+
+        try:
+            embed_dm = discord.Embed(
+                title="❌ Esito Richiesta Porto d'Armi",
+                description=f"Gentile **{self.nome_rp}**, spiacenti di comunicarle che la sua richiesta per il **Porto d'Armi** è stata **RIFIUTATA**.",
+                color=discord.Color.red()
+            )
+            embed_dm.add_field(name="📝 Motivazione Ufficiale", value=self.motivazione.value, inline=False)
+            embed_dm.set_footer(text="Questura • Divisione Polizia Amministrativa e Sociale")
+            await self.target_user.send(embed=embed_dm)
+        except discord.Forbidden:
+            pass
+
+        await interaction.followup.send(f"❌ Richiesta di {self.target_user.mention} rifiutata con successo.", ephemeral=True)
+
+
+# Pulsanti Gestione Staff Porto d'Armi
+class ViewGestioneStaffPortoArmi(discord.ui.View):
+    def __init__(self, target_user_id: int, nome_rp: str, eta_rp: str, motivazione_richiesta: str):
+        super().__init__(timeout=None)
+        self.target_user_id = target_user_id
+        self.nome_rp = nome_rp
+        self.eta_rp = eta_rp
+        self.motivazione_richiesta = motivazione_richiesta
+
+    @discord.ui.button(label="Accetta", style=discord.ButtonStyle.green, emoji="✅", custom_id="btn_accetta_porto_armi")
+    async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        # Assegnazione Ruolo Porto d'Armi
+        ruolo_porto = guild.get_role(ID_RUOLO_PORTO_ARMI)
+        if member and ruolo_porto:
+            await member.add_roles(ruolo_porto)
+
+        # 1. Modifica embed staff
+        embed_staff = interaction.message.embeds[0]
+        embed_staff.color = discord.Color.green()
+        embed_staff.set_footer(text=f"✅ APPROVATO da {interaction.user.display_name}")
+        await interaction.message.edit(embed=embed_staff, view=None)
+
+        # 2. Creazione post nel Forum
+        forum_canale = guild.get_channel(ID_FORUM_PORTO_ARMI_ACCETTATI)
+        if forum_canale and isinstance(forum_canale, discord.ForumChannel):
+            embed_forum = discord.Embed(
+                title=f"🛡️ PORTO D'ARMI - {self.nome_rp.upper()}",
+                description="Licenza di porto d'armi rilasciata ufficialmente dalle autorità competenti.",
+                color=discord.Color.dark_red()
+            )
+            embed_forum.add_field(name="👤 Titolare (RP)", value=self.nome_rp, inline=True)
+            embed_forum.add_field(name="🎂 Età RP", value=self.eta_rp, inline=True)
+            embed_forum.add_field(name="🆔 Utente Discord", value=f"<@{self.target_user_id}>", inline=False)
+            embed_forum.add_field(name="🎯 Motivazione Dichiarata", value=self.motivazione_richiesta, inline=False)
+            embed_forum.add_field(name="📜 Stato Licenza", value="🟢 **VALIDA / ATTIVA**", inline=False)
+            embed_forum.set_footer(text=f"Rilasciato da: {interaction.user.display_name}")
+
+            await forum_canale.create_thread(
+                name=f"🛡️ Porto d'Armi - {self.nome_rp}",
+                embed=embed_forum
+            )
+
+        # 3. Invio DM all'utente
+        if member:
+            try:
+                embed_dm = discord.Embed(
+                    title="🎉 Congratulazioni! Porto d'Armi Approvato",
+                    description=f"Gentile **{self.nome_rp}**, la sua richiesta per il **Porto d'Armi** è stata **APPROVATA**!\nLe è stato assegnato il rispettivo ruolo ed è stata emessa la licenza ufficiale nel registro del Forum.",
+                    color=discord.Color.green()
+                )
+                embed_dm.set_footer(text="Questura • Divisione Polizia Amministrativa e Sociale")
+                await member.send(embed=embed_dm)
+            except discord.Forbidden:
+                pass
+
+        await interaction.followup.send(f"✅ Porto d'armi di <@{self.target_user_id}> accettato con successo!", ephemeral=True)
+
+    @discord.ui.button(label="Rifiuta", style=discord.ButtonStyle.red, emoji="✖️", custom_id="btn_rifiuta_porto_armi")
+    async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        if not member:
+            await interaction.response.send_message("❌ Utente non trovato nel server.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(ModalRifiutoPortoArmi(target_user=member, nome_rp=self.nome_rp, messaggio_staff=interaction.message))
+
+
+# Modulo compilazione utente
+class ModalRichiestaPortoArmi(discord.ui.Modal, title="Richiesta Porto d'Armi"):
+    nome_rp = discord.ui.TextInput(
+        label="Nome e Cognome RP",
+        placeholder="Es. John Doe",
+        required=True,
+        max_length=50
+    )
+    eta_rp = discord.ui.TextInput(
+        label="Età RP",
+        placeholder="Es. 30",
+        required=True,
+        max_length=3
+    )
+    motivazione = discord.ui.TextInput(
+        label="Motivazione del porto d'armi",
+        style=discord.TextStyle.paragraph,
+        placeholder="Spiega dettagliatamente perché richiedi il porto d'armi...",
+        required=True,
+        max_length=350
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        canale_accettazioni = interaction.guild.get_channel(ID_CANALE_ACCETTAZIONI_PORTO_ARMI)
+        if not canale_accettazioni:
+            await interaction.followup.send("❌ Canale accettazioni porto d'armi non trovato.", ephemeral=True)
+            return
+
+        embed_staff = discord.Embed(
+            title="🛡️ NUOVA RICHIESTA PORTO D'ARMI",
+            description="È pervenuta una nuova istanza per il rilascio della licenza di porto d'armi.",
+            color=discord.Color.dark_gold()
+        )
+        embed_staff.add_field(name="👤 Utente Discord", value=interaction.user.mention, inline=True)
+        embed_staff.add_field(name="📝 Nome e Cognome RP", value=self.nome_rp.value, inline=True)
+        embed_staff.add_field(name="🎂 Età RP", value=self.eta_rp.value, inline=True)
+        embed_staff.add_field(name="🎯 Motivazione", value=self.motivazione.value, inline=False)
+        embed_staff.set_footer(text="Valutare attentamente prima di procedere all'approvazione.")
+
+        view = ViewGestioneStaffPortoArmi(
+            target_user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value,
+            eta_rp=self.eta_rp.value,
+            motivazione_richiesta=self.motivazione.value
+        )
+
+        await canale_accettazioni.send(embed=embed_staff, view=view)
+        await interaction.followup.send("✅ La tua richiesta di porto d'armi è stata inoltrata agli uffici competenti!", ephemeral=True)
+
+
+# View Pannello Pubblico
+class ViewPannelloPortoArmi(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Richiedi Porto d'Armi", style=discord.ButtonStyle.danger, emoji="🛡️", custom_id="btn_richiedi_porto_armi")
+    async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalRichiestaPortoArmi())
+
 
 
 # ==========================================
@@ -238,19 +431,19 @@ class ViewGestioneStaffImmatricolazione(discord.ui.View):
 class ModalRichiestaImmatricolazione(discord.ui.Modal, title="Modulo Immatricolazione Veicolo"):
     modello = discord.ui.TextInput(
         label="Modello Veicolo",
-        placeholder="Es. Audi RS6, Yamaha R1...",
+        placeholder="Es. Volksburg Marin",
         required=True,
         max_length=50
     )
     tipo_veicolo = discord.ui.TextInput(
         label="Tipo Veicolo",
-        placeholder="Es. Macchina, Moto, Fuoristrada...",
+        placeholder="Es. Macchina, Moto o altro",
         required=True,
         max_length=30
     )
     targa = discord.ui.TextInput(
-        label="Targa Desiderata",
-        placeholder="Es. AB123CD",
+        label="Targa Veicolo",
+        placeholder="Es. AB/CD/10",
         required=True,
         max_length=15
     )
@@ -1342,6 +1535,7 @@ async def on_ready():
     # Registrazione delle View per rendere i pulsanti persistenti
     bot.add_view(ViewPannelloPatenteB())
     bot.add_view(ViewPannelloImmatricolazione())
+    bot.add_view(ViewPannelloPortoArmi())
 
     # 1. Invio forzato e diretto del pannello Patente B
     canale_patente = bot.get_channel(ID_CANALE_PANNELLO_PATENTE)
@@ -1396,12 +1590,41 @@ async def on_ready():
     else:
         print(f"ERRORE: Canale con ID {ID_CANALE_PANNELLO_IMMATRICOLAZIONE} non trovato o bot senza accesso!")
 
-    # 3. Sincronizzazione dei comandi slash
+    # 3. Invio forzato e diretto del pannello Porto d'Armi
+    canale_porto = bot.get_channel(ID_CANALE_PANNELLO_PORTO_ARMI)
+    if canale_porto:
+        try:
+            embed_pa = discord.Embed(
+                title="🛡️ QUESTURA • SPORTELLO PORTO D'ARMI",
+                description=(
+                    "Benvenuto allo sportello ufficiale della **Divisione Polizia Amministrativa**.\n\n"
+                    "Il **Porto d'Armi** è il documento ufficiale che autorizza il porto e la detenzione legale di armi da fuoco "
+                    "nel pieno rispetto delle normative vigenti sul territorio.\n\n"
+                    "📋 **REQUISITI E PROCEDURE:**\n"
+                    "• Clicca sul pulsante sottostante per avviare la pratica.\n"
+                    "• Compila rigorosamente i dati anagrafici con la tua identità **Roleplay**.\n"
+                    "• Specifica con chiarezza e realismo la motivazione della richiesta.\n\n"
+                    "⚠️ *Ogni falsa dichiarazione o uso improprio comporterà il ritiro immediato del titolo e sanzioni penali.*"
+                ),
+                color=discord.Color.dark_red()
+            )
+            embed_pa.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/1041/1041916.png")
+            embed_pa.set_footer(text="Questura • Divisione Polizia Amministrativa", icon_url=bot.user.display_avatar.url)
+
+            await canale_porto.send(embed=embed_pa, view=ViewPannelloPortoArmi())
+            print("Pannello Porto d'Armi inviato con successo!")
+        except Exception as e:
+            print(f"ERRORE INVIO PANNELLO PORTO D'ARMI: {e}")
+    else:
+        print(f"ERRORE: Canale con ID {ID_CANALE_PANNELLO_PORTO_ARMI} non trovato o bot senza accesso!")
+
+    # 4. Sincronizzazione dei comandi slash
     try:
         synced = await bot.tree.sync()
         print(f"Sincronizzati {len(synced)} comandi slash.")
     except Exception as e:
         print(f"Errore sincronizzazione comandi: {e}")
+        
 
 
 keep_alive()
