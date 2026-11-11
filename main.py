@@ -1536,7 +1536,8 @@ async def on_ready():
     bot.add_view(ViewPannelloPatenteB())
     bot.add_view(ViewPannelloImmatricolazione())
     bot.add_view(ViewPannelloPortoArmi())
-
+    bot.add_view(VistaCittadinanza())
+    
     # 1. Invio forzato e diretto del pannello Patente B
     canale_patente = bot.get_channel(ID_CANALE_PANNELLO_PATENTE)
     if canale_patente:
