@@ -274,7 +274,7 @@ class ViewPannelloPatenteC(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Richiedi Patente C", style=discord.ButtonStyle.secondary, emoji="🚛", custom_id="btn_richiedi_patente_c")
+    @discord.ui.button(label="Richiedi Patente C", style=discord.ButtonStyle.primary, emoji="🚛", custom_id="btn_richiedi_patente_c")
     async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ModalRichiestaPatenteC())
 
@@ -419,7 +419,7 @@ class ViewPannelloPatenteD(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Richiedi Patente D", style=discord.ButtonStyle.secondary, emoji="🚌", custom_id="btn_richiedi_patente_d")
+    @discord.ui.button(label="Richiedi Patente D", style=discord.ButtonStyle.primary, emoji="🚌", custom_id="btn_richiedi_patente_d")
     async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ModalRichiestaPatenteD())
 
