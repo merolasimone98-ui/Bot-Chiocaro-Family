@@ -1142,6 +1142,46 @@ async def esci(interaction: discord.Interaction):
 # ==========================================
 # 9. AVVIO APPLICAZIONE
 # ==========================================
+@bot.event
+async def on_ready():
+    print(f"Bot online come {bot.user}")
+    bot.add_view(ViewPannelloPatenteB())
+
+    # Invio forzato e diretto nel canale
+    canale = bot.get_channel(ID_CANALE_PANNELLO_PATENTE)
+    if canale:
+        try:
+            embed = discord.Embed(
+                title="🚘 MOTORIZZAZIONE CIVILE - RICHIESTA PATENTE B",
+                description=(
+                    "Benvenuto nello sportello digitale della **Motorizzazione Civile**.\n\n"
+                    "La **Patente B** ti autorizza alla guida di autoveicoli, autovetture private e mezzi di trasporto leggeri "
+                    "all'interno del territorio di gioco.\n\n"
+                    "📋 **REQUISITI E ISTRUZIONI:**\n"
+                    "• Compila il modulo cliccando sul pulsante sottostante.\n"
+                    "• Inserisci i dati della tua identità **Roleplay** con la massima accuratezza.\n"
+                    "• Le richieste vengono revisionate in tempo reale dagli esaminatori preposti.\n\n"
+                    "⚠️ *Eventuali dichiarazioni mendaci comportano il rigetto istantaneo della pratica.*"
+                ),
+                color=discord.Color.blue()
+            )
+            embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3202/3202003.png")
+            embed.set_footer(text="Motorizzazione Civile • Sistema Licenze RP", icon_url=bot.user.display_avatar.url)
+
+            await canale.send(embed=embed, view=ViewPannelloPatenteB())
+            print("Pannello Patente B inviato con successo!")
+        except Exception as e:
+            print(f"ERRORE INVIO PANNELLO: {e}")
+    else:
+        print(f"ERRORE: Canale con ID {ID_CANALE_PANNELLO_PATENTE} non trovato o bot senza accesso!")
+
+    try:
+        synced = await bot.tree.sync()
+        print(f"Sincronizzati {len(synced)} comandi slash.")
+    except Exception as e:
+        print(f"Errore sincronizzazione comandi: {e}")
+
+
 keep_alive()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
