@@ -1426,42 +1426,6 @@ class ViewPannelloPatenteB(discord.ui.View):
         await interaction.response.send_modal(ModalRichiestaPatenteB())
 
 
-# ==========================================
-# 4. EVENTO ON_READY (INVIO AUTOMATICO)
-# ==========================================
-@bot.event
-async def on_ready():
-    print(f"Bot online come {bot.user}")
-    bot.add_view(ViewPannelloPatenteB())
-
-    # Invio automatico del pannello nel canale configurato
-    canale = bot.get_channel(ID_CANALE_PANNELLO_PATENTE)
-    if canale:
-        # Controlla se il bot ha già inviato il pannello per evitare doppioni
-        async for message in canale.history(limit=20):
-            if message.author == bot.user and message.embeds and "MOTORIZZAZIONE CIVILE" in message.embeds[0].title:
-                print("Pannello Patente B già presente nel canale.")
-                break
-        else:
-            embed = discord.Embed(
-                title="🚘 MOTORIZZAZIONE CIVILE - RICHIESTA PATENTE B",
-                description=(
-                    "Benvenuto nello sportello digitale della **Motorizzazione Civile**.\n\n"
-                    "La **Patente B** ti autorizza alla guida di autoveicoli, autovetture private e mezzi di trasporto leggeri "
-                    "all'interno del territorio di gioco.\n\n"
-                    "📋 **REQUISITI E ISTRUZIONI:**\n"
-                    "• Compila il modulo cliccando sul pulsante sottostante.\n"
-                    "• Inserisci i dati della tua identità **Roleplay** con la massima accuratezza.\n"
-                    "• Le richieste vengono revisionate in tempo reale dagli esaminatori preposti.\n\n"
-                    "⚠️ *Eventuali dichiarazioni mendaci comportano il rigetto istantaneo della pratica.*"
-                ),
-                color=discord.Color.blue()
-            )
-            embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3202/3202003.png")
-            embed.set_footer(text="Motorizzazione Civile • Sistema Licenze RP", icon_url=bot.user.display_avatar.url)
-
-            await canale.send(embed=embed, view=ViewPannelloPatenteB())
-            print("Pannello Patente B inviato automaticamente nel canale!")
 
     try:
         synced = await bot.tree.sync()
@@ -1791,7 +1755,7 @@ class VistaStaffCatuozzo(discord.ui.View):
         if utente:
             try:
                 embed_dm = discord.Embed(
-                    title="⚡ AMMISSIONE UFFICIALE - FAMIGLIA CATUOZZO",
+                    title="🍞 AMMISSIONE UFFICIALE - FAMIGLIA CATUOZZO",
                     description=(
                         "Il capofamiglia e i luogotenenti hanno esaminato la tua scheda. La tua determinazione è stata premiata!\n\n"
                         "🐺 **Fai ufficialmente parte della Famiglia Catuozzo.** Ti è stato conferito il ruolo ufficiale e l'accesso alle chat protette. Proteggi i tuoi fratelli e porta gloria al nostro stemma!"
@@ -1858,7 +1822,7 @@ class VistaStaffCatuozzo(discord.ui.View):
         await interaction.message.edit(embed=embed_modificato, view=self)
         await interaction.response.send_message("Candidatura Catuozzo rifiutata.", ephemeral=True)
 
-class ModuloCatuozzo(discord.ui.Modal, title="⚡ Candidatura Ufficiale - Famiglia Catuozzo"):
+class ModuloCatuozzo(discord.ui.Modal, title="🍞 Candidatura Ufficiale - Famiglia Catuozzo"):
     conferma = discord.ui.TextInput(label="Sei sicuro di voler entrare?", placeholder="Conferma la tua intenzione...", style=discord.TextStyle.short, required=True, max_length=50)
     motivo_ingresso = discord.ui.TextInput(label="Perché vuoi entrare?", placeholder="Motiva la scelta di unirti alla nostra causa...", style=discord.TextStyle.paragraph, required=True, max_length=300)
     motivo_scelta = discord.ui.TextInput(label="Perché dovremmo scegliere te?", placeholder="Dimostra il tuo valore strategico...", style=discord.TextStyle.paragraph, required=True, max_length=300)
@@ -1993,7 +1957,7 @@ class VistaStaffLifardo(discord.ui.View):
         await interaction.message.edit(embed=embed_modificato, view=self)
         await interaction.response.send_message("Candidatura Lifardo rifiutata.", ephemeral=True)
 
-class ModuloLifardo(discord.ui.Modal, title="🦅 Candidatura Ufficiale - Famiglia Lifardo"):
+class ModuloLifardo(discord.ui.Modal, title="🍇 Candidatura Ufficiale - Famiglia Lifardo"):
     conferma = discord.ui.TextInput(label="Sei sicuro di voler entrare?", placeholder="Conferma la tua ferrea volontà...", style=discord.TextStyle.short, required=True, max_length=50)
     motivo_ingresso = discord.ui.TextInput(label="Perché vuoi entrare?", placeholder="Spiega perché desideri unire le forze con noi...", style=discord.TextStyle.paragraph, required=True, max_length=300)
     motivo_scelta = discord.ui.TextInput(label="Perché dovremmo scegliere te?", placeholder="Illustra le tue qualità e competenze...", style=discord.TextStyle.paragraph, required=True, max_length=300)
@@ -2026,7 +1990,7 @@ class VistaRichiestaLifardo(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Entra nella Famiglia Lifardo 🦅", style=discord.ButtonStyle.blurple, custom_id="btn_richiesta_lifardo_perm")
+    @discord.ui.button(label="Entra nella Famiglia Lifardo 🍇", style=discord.ButtonStyle.blurple, custom_id="btn_richiesta_lifardo_perm")
     async def apri_modulo(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ModuloLifardo())
 
@@ -2060,7 +2024,7 @@ async def tumore(interaction: discord.Interaction, membro: discord.Member = None
     await interaction.response.send_message(embed=embed)
 
 # ==========================================
-# 8. EVENTI DI AVVIO (ON_READY)
+# 8. EVENTI DI AVVIO (ON_REA)
 # ==========================================
 @bot.event
 async def on_ready():
