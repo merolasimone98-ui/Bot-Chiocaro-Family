@@ -137,8 +137,11 @@ ID_RUOLO_PATENTE_D = 1569837367651733574
 # ==========================================
 ID_CANALE_PANNELLO_ASSICURAZIONI = 1570120327936344145
 ID_CANALE_ACCETTAZIONI_ASSICURAZIONI = 1570122814974075000
-ID_FORUM_ASSICURAZIONI_ACCETTATE = 1570123053151690772
+ID_FORUM_ASSICURAZIONI_ACCETTATE = 1570124308972568586
 ID_RUOLO_ASSICURATO = 1569837091351699456
+
+
+
 
 # Modale motivazione rifiuto Assicurazione
 class ModalRifiutoAssicurazione(discord.ui.Modal, title="Motivazione Rifiuto Assicurazione"):
@@ -277,19 +280,19 @@ class ModalRichiestaAssicurazione(discord.ui.Modal, title="Stipula Polizza Assic
     )
     modello = discord.ui.TextInput(
         label="Modello del Veicolo",
-        placeholder="Es. Fiat Grande Punto / BMW M4",
+        placeholder="Es. Volksburg Marin",
         required=True,
         max_length=50
     )
     targa = discord.ui.TextInput(
         label="Targa del Veicolo",
-        placeholder="Es. AB123CD",
+        placeholder="Es. AB/CD/10",
         required=True,
         max_length=10
     )
     tipo_veicolo = discord.ui.TextInput(
         label="Categoria / Tipo Veicolo",
-        placeholder="Es. Auto, Moto, Camion, Furgone...",
+        placeholder="Es. Auto, Moto o altro",
         required=True,
         max_length=30
     )
