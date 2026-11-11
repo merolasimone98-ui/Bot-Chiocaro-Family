@@ -1427,13 +1427,6 @@ class ViewPannelloPatenteB(discord.ui.View):
 
 
 
-    try:
-        synced = await bot.tree.sync()
-        print(f"Sincronizzati {len(synced)} comandi slash.")
-    except Exception as e:
-        print(f"Errore sincronizzazione comandi: {e}")
-
-
 # ==========================================
 # 3. SISTEMA CITTADINANZA
 # ==========================================
