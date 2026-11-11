@@ -134,6 +134,210 @@ ID_CANALE_ACCETTAZIONI_PATENTE_D = 1570106059568447599
 ID_FORUM_PATENTI_D_ACCETTATE = 1570105570940293130
 ID_RUOLO_PATENTE_D = 1569837367651733574
 
+# ==========================================
+ID_CANALE_PANNELLO_ASSICURAZIONI = 1570120327936344145
+ID_CANALE_ACCETTAZIONI_ASSICURAZIONI = 1570122814974075000
+ID_FORUM_ASSICURAZIONI_ACCETTATE = 1570123053151690772
+ID_RUOLO_ASSICURATO = 1569837091351699456
+
+# Modale motivazione rifiuto Assicurazione
+class ModalRifiutoAssicurazione(discord.ui.Modal, title="Motivazione Rifiuto Assicurazione"):
+    motivazione = discord.ui.TextInput(
+        label="Motivo del rifiuto",
+        style=discord.TextStyle.paragraph,
+        placeholder="Es. Veicolo non immatricolato, dati errati o mancanti...",
+        required=True,
+        max_length=500
+    )
+
+    def __init__(self, target_user: discord.Member, nome_rp: str, targa: str, messaggio_staff: discord.Message):
+        super().__init__()
+        self.target_user = target_user
+        self.nome_rp = nome_rp
+        self.targa = targa
+        self.messaggio_staff = messaggio_staff
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        embed_staff = self.messaggio_staff.embeds[0]
+        embed_staff.color = discord.Color.red()
+        embed_staff.set_footer(text=f"❌ RIFIUTATO da {interaction.user.display_name}")
+        embed_staff.add_field(name="📌 Motivazione Rifiuto", value=self.motivazione.value, inline=False)
+        await self.messaggio_staff.edit(embed=embed_staff, view=None)
+
+        try:
+            embed_dm = discord.Embed(
+                title="❌ Esito PRATICA ASSICURAZIONE",
+                description=f"Ciao **{self.nome_rp}**, la tua richiesta di polizza per il veicolo targa **{self.targa}** è stata **RIFIUTATA**.",
+                color=discord.Color.red()
+            )
+            embed_dm.add_field(name="📝 Motivazione", value=self.motivazione.value, inline=False)
+            embed_dm.set_footer(text="Ufficio Assicurazioni • Servizi RP")
+            await self.target_user.send(embed=embed_dm)
+        except discord.Forbidden:
+            pass
+
+        await interaction.followup.send(f"❌ Polizza di {self.target_user.mention} rifiutata con successo.", ephemeral=True)
+
+
+# Pulsanti Gestione Staff Assicurazione
+class ViewGestioneStaffAssicurazione(discord.ui.View):
+    def __init__(self, target_user_id: int, nome_rp: str, modello: str, targa: str, tipo_veicolo: str):
+        super().__init__(timeout=None)
+        self.target_user_id = target_user_id
+        self.nome_rp = nome_rp
+        self.modello = modello
+        self.targa = targa
+        self.tipo_veicolo = tipo_veicolo
+
+    @discord.ui.button(label="Accetta Polizza", style=discord.ButtonStyle.green, emoji="✅", custom_id="btn_accetta_assicurazione")
+    async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        # Assegnazione Ruolo Assicurato
+        ruolo_assicurato = guild.get_role(ID_RUOLO_ASSICURATO)
+        if member and ruolo_assicurato:
+            await member.add_roles(ruolo_assicurato)
+
+        # 1. Modifica embed nel canale staff
+        embed_staff = interaction.message.embeds[0]
+        embed_staff.color = discord.Color.green()
+        embed_staff.set_footer(text=f"✅ ACCETTATO da {interaction.user.display_name}")
+        await interaction.message.edit(embed=embed_staff, view=None)
+
+        # 2. Creazione post nel Forum
+        forum_canale = guild.get_channel(ID_FORUM_ASSICURAZIONI_ACCETTATE)
+        if forum_canale and isinstance(forum_canale, discord.ForumChannel):
+            embed_forum = discord.Embed(
+                title=f"📜 POLIZZA ASSICURATIVA - {self.targa.upper()}",
+                description="Certificato di copertura assicurativa emesso dall'Ufficio Centrale.",
+                color=discord.Color.green()
+            )
+            embed_forum.add_field(name="👤 Intestatario (RP)", value=self.nome_rp, inline=True)
+            embed_forum.add_field(name="🚘 Modello Veicolo", value=self.modello, inline=True)
+            embed_forum.add_field(name="🔢 Targa", value=self.targa.upper(), inline=True)
+            embed_forum.add_field(name="🚗 Categoria", value=self.tipo_veicolo, inline=True)
+            embed_forum.add_field(name="🆔 Proprietario Discord", value=f"<@{self.target_user_id}>", inline=False)
+            embed_forum.add_field(name="🛡️ Stato Copertura", value="🟢 **ATTIVA E VALIDA**", inline=False)
+            embed_forum.set_footer(text=f"Polizza registrata da: {interaction.user.display_name}")
+
+            await forum_canale.create_thread(
+                name=f"📜 Assicurazione - {self.targa.upper()} ({self.nome_rp})",
+                embed=embed_forum
+            )
+
+        # 3. Invio DM all'utente
+        if member:
+            try:
+                embed_dm = discord.Embed(
+                    title="🎉 Polizza Assicurativa Attivata!",
+                    description=f"Ciao **{self.nome_rp}**, la polizza per il tuo veicolo **{self.modello}** (Targa: **{self.targa.upper()}**) è stata **APPROVATA** ed è ora attiva!",
+                    color=discord.Color.green()
+                )
+                embed_dm.set_footer(text="Ufficio Assicurazioni • Servizi RP")
+                await member.send(embed=embed_dm)
+            except discord.Forbidden:
+                pass
+
+        await interaction.followup.send(f"✅ Assicurazione per la targa **{self.targa.upper()}** approvata con successo!", ephemeral=True)
+
+    @discord.ui.button(label="Rifiuta", style=discord.ButtonStyle.red, emoji="✖️", custom_id="btn_rifiuta_assicurazione")
+    async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        if not member:
+            await interaction.response.send_message("❌ Utente non trovato nel server.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(ModalRifiutoAssicurazione(target_user=member, nome_rp=self.nome_rp, targa=self.targa, messaggio_staff=interaction.message))
+
+
+# Modulo compilazione utente Assicurazione
+class ModalRichiestaAssicurazione(discord.ui.Modal, title="Stipula Polizza Assicurativa"):
+    nome_rp = discord.ui.TextInput(
+        label="Nome e Cognome Intestatario RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    modello = discord.ui.TextInput(
+        label="Modello del Veicolo",
+        placeholder="Es. Fiat Grande Punto / BMW M4",
+        required=True,
+        max_length=50
+    )
+    targa = discord.ui.TextInput(
+        label="Targa del Veicolo",
+        placeholder="Es. AB123CD",
+        required=True,
+        max_length=10
+    )
+    tipo_veicolo = discord.ui.TextInput(
+        label="Categoria / Tipo Veicolo",
+        placeholder="Es. Auto, Moto, Camion, Furgone...",
+        required=True,
+        max_length=30
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        canale_accettazioni = interaction.guild.get_channel(ID_CANALE_ACCETTAZIONI_ASSICURAZIONI)
+        if not canale_accettazioni:
+            await interaction.followup.send("❌ Canale accettazioni Assicurazioni non trovato.", ephemeral=True)
+            return
+
+        embed_staff = discord.Embed(
+            title="📜 NUOVA RICHIESTA ASSICURAZIONE",
+            description="È stata inoltrata una nuova pratica per la stipula di una polizza veicolo.",
+            color=discord.Color.gold()
+        )
+        embed_staff.add_field(name="👤 Utente Discord", value=interaction.user.mention, inline=True)
+        embed_staff.add_field(name="📝 Intestatario RP", value=self.nome_rp.value, inline=True)
+        embed_staff.add_field(name="🚘 Modello Veicolo", value=self.modello.value, inline=True)
+        embed_staff.add_field(name="🔢 Targa", value=self.targa.value.upper(), inline=True)
+        embed_staff.add_field(name="🚗 Categoria", value=self.tipo_veicolo.value, inline=True)
+        embed_staff.set_footer(text="Usa i pulsanti sottostanti per gestire la polizza.")
+
+        view = ViewGestioneStaffAssicurazione(
+            target_user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value,
+            modello=self.modello.value,
+            targa=self.targa.value,
+            tipo_veicolo=self.tipo_veicolo.value
+        )
+        
+        await canale_accettazioni.send(embed=embed_staff, view=view)
+        await interaction.followup.send("✅ La tua richiesta di **Assicurazione** è stata inviata allo staff!", ephemeral=True)
+
+
+# View Pannello Pubblico Assicurazione
+class ViewPannelloAssicurazione(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Stipula Assicurazione", style=discord.ButtonStyle.success, emoji="📜", custom_id="btn_richiedi_assicurazione")
+    async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalRichiestaAssicurazione())
+
+
+
+
 class ModalRifiutoPatenteC(discord.ui.Modal, title="Motivazione Rifiuto Patente C"):
     motivazione = discord.ui.TextInput(
         label="Motivo del rifiuto",
@@ -825,6 +1029,12 @@ class ViewPannelloPortoArmi(discord.ui.View):
 
     @discord.ui.button(label="Richiedi Porto d'Armi", style=discord.ButtonStyle.danger, emoji="🛡️", custom_id="btn_richiedi_porto_armi")
     async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Controllo se l'utente possiede già il ruolo del Porto d'Armi
+        ruolo = interaction.guild.get_role(ID_RUOLO_PORTO_ARMI)
+        if ruolo and ruolo in interaction.user.roles:
+            await interaction.response.send_message("❌ **Porto d'Armi già attivo!** Risulti già in possesso di questa autorizzazione.", ephemeral=True)
+            return
+
         await interaction.response.send_modal(ModalRichiestaPortoArmi())
 
 
@@ -2077,6 +2287,32 @@ async def on_ready():
     bot.add_view(ViewPannelloPatenteA())
     bot.add_view(ViewPannelloPatenteC())
     bot.add_view(ViewPannelloPatenteD())
+    bot.add_view(ViewPannelloAssicurazione())
+
+    # Pannello Assicurazione Veicoli
+    canale_assicurazione = bot.get_channel(ID_CANALE_PANNELLO_ASSICURAZIONI)
+    if canale_assicurazione:
+        try:
+            embed_ass = discord.Embed(
+                title="📜 UFFICIO CENTRALE - ASSICURAZIONE VEICOLI",
+                description=(
+                    "Benvenuto nello sportello digitale per la **Stipula e Rinnovo Polizze Assicurative**.\n\n"
+                    "Circolare con un veicolo sprovvisto di regolare copertura assicurativa è un reato sanzionabile "
+                    "con il sequestro del mezzo e sanzioni amministrative.\n\n"
+                    "📋 **ISTRUZIONI PER LA COMPILAZIONE:**\n"
+                    "• Clicca sul pulsante verde sottostante per aprire il modulo.\n"
+                    "• Inserisci l'intestatario RP, il modello del veicolo, la targa e la categoria.\n"
+                    "• Attendi l'esito della pratica da parte degli operatori preposti.\n\n"
+                    "🛡️ *Servizio Ufficiale Registrazione Polizze RP*"
+                ),
+                color=discord.Color.gold()
+            )
+            embed_ass.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/2966/2966327.png")
+            embed_ass.set_footer(text="Motorizzazione & Servizi Assicurativi RP", icon_url=bot.user.display_avatar.url)
+            await canale_assicurazione.send(embed=embed_ass, view=ViewPannelloAssicurazione())
+            print("Pannello Assicurazioni inviato con successo!")
+        except Exception as e:
+            print(f"ERRORE INVIO PANNELLO ASSICURAZIONI: {e}")
     
     # 1. Pannello Patente B
     canale_patente = bot.get_channel(ID_CANALE_PANNELLO_PATENTE)
