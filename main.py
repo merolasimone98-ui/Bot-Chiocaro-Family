@@ -1,14 +1,12 @@
 import os
-import random
 from threading import Thread
 import discord
 from discord import app_commands
 from discord.ext import commands
 from flask import Flask
-import psycopg2
 
 # ==========================================
-# 1. CONFIGURAZIONE SERVER FLASK (RENDER FREE)
+# 1. SERVER FLASK (RENDER FREE)
 # ==========================================
 app = Flask('')
 
@@ -17,13 +15,15 @@ def home():
     return "Chiocaro Bot è attivo e operativo!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=10000)
+    # Usiamo use_reloader=False per evitare doppi avvii e conflitti di porta
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 def keep_alive():
-    thread = Thread(target=run_flask)
-    thread.start()
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
 
-# Avvia il server Flask per mantenere il bot attivo su Render
 keep_alive()
 
 # ==========================================
