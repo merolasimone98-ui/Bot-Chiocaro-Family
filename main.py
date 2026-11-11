@@ -113,6 +113,201 @@ ID_CANALE_ACCETTAZIONI_PORTO_ARMI = 1570092906348412938
 ID_FORUM_PORTO_ARMI_ACCETTATI = 1570093039052005497
 ID_RUOLO_PORTO_ARMI = 1569836896312631356
 
+# SISTEMA PATENTE A
+# ==========================================
+ID_CANALE_PANNELLO_PATENTE_A = 1570100083473514587
+ID_CANALE_ACCETTAZIONI_PATENTE_A = 1570103682073366608
+ID_FORUM_PATENTI_A_ACCETTATE = 1570103776751124581
+ID_RUOLO_PATENTE_A = 1569837330829672509
+
+
+
+# Modulo motivazione rifiuto Patente A
+class ModalRifiutoPatenteA(discord.ui.Modal, title="Motivazione Rifiuto Patente A"):
+    motivazione = discord.ui.TextInput(
+        label="Motivo del rifiuto",
+        style=discord.TextStyle.paragraph,
+        placeholder="Es. Requisiti non idonei, esito negativo alla prova...",
+        required=True,
+        max_length=500
+    )
+
+    def __init__(self, target_user: discord.Member, nome_rp: str, messaggio_staff: discord.Message):
+        super().__init__()
+        self.target_user = target_user
+        self.nome_rp = nome_rp
+        self.messaggio_staff = messaggio_staff
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        embed_staff = self.messaggio_staff.embeds[0]
+        embed_staff.color = discord.Color.red()
+        embed_staff.set_footer(text=f"❌ RIFIUTATO da {interaction.user.display_name}")
+        embed_staff.add_field(name="📌 Motivazione Rifiuto", value=self.motivazione.value, inline=False)
+        await self.messaggio_staff.edit(embed=embed_staff, view=None)
+
+        try:
+            embed_dm = discord.Embed(
+                title="❌ Esito Richiesta Patente A",
+                description=f"Ciao **{self.nome_rp}**, la tua richiesta per la **Patente A** è stata **RIFIUTATA**.",
+                color=discord.Color.red()
+            )
+            embed_dm.add_field(name="📝 Motivazione", value=self.motivazione.value, inline=False)
+            embed_dm.set_footer(text="Motorizzazione Civile • Sezione Motocicli")
+            await self.target_user.send(embed=embed_dm)
+        except discord.Forbidden:
+            pass
+
+        await interaction.followup.send(f"❌ Richiesta di {self.target_user.mention} rifiutata con successo.", ephemeral=True)
+
+
+# Pulsanti Gestione Staff Patente A
+class ViewGestioneStaffPatenteA(discord.ui.View):
+    def __init__(self, target_user_id: int, nome_rp: str, eta_rp: str, motivazione_richiesta: str):
+        super().__init__(timeout=None)
+        self.target_user_id = target_user_id
+        self.nome_rp = nome_rp
+        self.eta_rp = eta_rp
+        self.motivazione_richiesta = motivazione_richiesta
+
+    @discord.ui.button(label="Accetta", style=discord.ButtonStyle.green, emoji="✅", custom_id="btn_accetta_patente_a")
+    async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        # Assegnazione Ruolo Patente A
+        ruolo_patente_a = guild.get_role(ID_RUOLO_PATENTE_A)
+        if member and ruolo_patente_a:
+            await member.add_roles(ruolo_patente_a)
+
+        # 1. Modifica embed nel canale staff
+        embed_staff = interaction.message.embeds[0]
+        embed_staff.color = discord.Color.green()
+        embed_staff.set_footer(text=f"✅ ACCETTATO da {interaction.user.display_name}")
+        await interaction.message.edit(embed=embed_staff, view=None)
+
+        # 2. Creazione post nel Forum
+        forum_canale = guild.get_channel(ID_FORUM_PATENTI_A_ACCETTATE)
+        if forum_canale and isinstance(forum_canale, discord.ForumChannel):
+            embed_forum = discord.Embed(
+                title=f"🏍️ SCHEDA PATENTE A - {self.nome_rp.upper()}",
+                description="Licenza di guida per motoveicoli accreditata ed emessa dalla Motorizzazione Civile.",
+                color=discord.Color.orange()
+            )
+            embed_forum.add_field(name="👤 Titolare (RP)", value=self.nome_rp, inline=True)
+            embed_forum.add_field(name="🎂 Età RP", value=self.eta_rp, inline=True)
+            embed_forum.add_field(name="🆔 Utente Discord", value=f"<@{self.target_user_id}>", inline=False)
+            embed_forum.add_field(name="🎯 Motivazione", value=self.motivazione_richiesta, inline=False)
+            embed_forum.add_field(name="📜 Stato Licenza", value="🟢 **ATTIVA / VALIDA**", inline=False)
+            embed_forum.set_footer(text=f"Approvata da: {interaction.user.display_name}")
+
+            await forum_canale.create_thread(
+                name=f"🏍️ Patente A - {self.nome_rp}",
+                embed=embed_forum
+            )
+
+        # 3. Invio DM all'utente
+        if member:
+            try:
+                embed_dm = discord.Embed(
+                    title="🎉 Congratulazioni! Patente A Approvata",
+                    description=f"Ciao **{self.nome_rp}**, la tua richiesta per la **Patente A** è stata **ACCETTATA**!\nTi è stato assegnato il ruolo ufficiale ed è stata emessa la tua scheda nel Forum.",
+                    color=discord.Color.green()
+                )
+                embed_dm.set_footer(text="Motorizzazione Civile • Sezione Motocicli")
+                await member.send(embed=embed_dm)
+            except discord.Forbidden:
+                pass
+
+        await interaction.followup.send(f"✅ Patente A di <@{self.target_user_id}> accettata con successo!", ephemeral=True)
+
+    @discord.ui.button(label="Rifiuta", style=discord.ButtonStyle.red, emoji="✖️", custom_id="btn_rifiuta_patente_a")
+    async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        if not member:
+            await interaction.response.send_message("❌ Utente non trovato nel server.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(ModalRifiutoPatenteA(target_user=member, nome_rp=self.nome_rp, messaggio_staff=interaction.message))
+
+
+# Modulo compilazione utente Patente A
+class ModalRichiestaPatenteA(discord.ui.Modal, title="Modulo Richiesta Patente A"):
+    nome_rp = discord.ui.TextInput(
+        label="Nome e Cognome RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    eta_rp = discord.ui.TextInput(
+        label="Età RP",
+        placeholder="Es. 22",
+        required=True,
+        max_length=3
+    )
+    motivo = discord.ui.TextInput(
+        label="Motivazione richiesta",
+        style=discord.TextStyle.paragraph,
+        placeholder="Spiega brevemente perché richiedi la patente A...",
+        required=True,
+        max_length=300
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        canale_accettazioni = interaction.guild.get_channel(ID_CANALE_ACCETTAZIONI_PATENTE_A)
+        if not canale_accettazioni:
+            await interaction.followup.send("❌ Canale accettazioni Patente A non trovato.", ephemeral=True)
+            return
+
+        embed_staff = discord.Embed(
+            title="🏍️ NUOVA RICHIESTA PATENTE A",
+            description="È pervenuta una nuova istanza per il conseguimento della Patente A.",
+            color=discord.Color.orange()
+        )
+        embed_staff.add_field(name="👤 Utente Discord", value=interaction.user.mention, inline=True)
+        embed_staff.add_field(name="📝 Nome e Cognome RP", value=self.nome_rp.value, inline=True)
+        embed_staff.add_field(name="🎂 Età RP", value=self.eta_rp.value, inline=True)
+        embed_staff.add_field(name="📄 Motivazione", value=self.motivo.value, inline=False)
+        embed_staff.set_footer(text="Usa i pulsanti sottostanti per gestire la richiesta.")
+
+        view = ViewGestioneStaffPatenteA(
+            target_user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value,
+            eta_rp=self.eta_rp.value,
+            motivazione_richiesta=self.motivo.value
+        )
+        
+        await canale_accettazioni.send(embed=embed_staff, view=view)
+        await interaction.followup.send("✅ La tua richiesta per la **Patente A** è stata inviata allo staff!", ephemeral=True)
+
+
+# View Pannello Pubblico Patente A
+class ViewPannelloPatenteA(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Richiedi Patente A", style=discord.ButtonStyle.primary, emoji="🏍️", custom_id="btn_richiedi_patente_a")
+    async def richiedi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalRichiestaPatenteA())
+
+
+
 # ==========================================
 # 5. SISTEMA PORTO D'ARMI
 # ==========================================
@@ -253,6 +448,12 @@ class ModalRichiestaPortoArmi(discord.ui.Modal, title="Richiesta Porto d'Armi"):
         placeholder="Es. 30",
         required=True,
         max_length=3
+    )
+    arma = discord.ui.TextInput(
+        label="Tipo di arma",
+        placeholder="Es. Glock-17, G36",
+        required=True,
+        max_length=20
     )
     motivazione = discord.ui.TextInput(
         label="Motivazione del porto d'armi",
@@ -1537,8 +1738,12 @@ async def on_ready():
     bot.add_view(ViewPannelloImmatricolazione())
     bot.add_view(ViewPannelloPortoArmi())
     bot.add_view(VistaCittadinanza())
+    bot.add_view(VistaRichiestaChiocaro())
+    bot.add_view(VistaRichiestaCatuozzo())
+    bot.add_view(VistaRichiestaLifardo())
+    bot.add_view(ViewPannelloPatenteA())
     
-    # 1. Invio forzato e diretto del pannello Patente B
+    # 1. Pannello Patente B
     canale_patente = bot.get_channel(ID_CANALE_PANNELLO_PATENTE)
     if canale_patente:
         try:
@@ -1558,15 +1763,12 @@ async def on_ready():
             )
             embed_p.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3202/3202003.png")
             embed_p.set_footer(text="Motorizzazione Civile • Sistema Licenze RP", icon_url=bot.user.display_avatar.url)
-
             await canale_patente.send(embed=embed_p, view=ViewPannelloPatenteB())
             print("Pannello Patente B inviato con successo!")
         except Exception as e:
-            print(f"ERRORE INVIO PANNELLO PATENTE: {e}")
-    else:
-        print(f"ERRORE: Canale con ID {ID_CANALE_PANNELLO_PATENTE} non trovato o bot senza accesso!")
+            print(f"ERRORE INVIO PANNELLO PATENTE B: {e}")
 
-    # 2. Invio forzato e diretto del pannello Immatricolazione Veicoli
+    # 2. Pannello Immatricolazioni
     canale_immat = bot.get_channel(ID_CANALE_PANNELLO_IMMATRICOLAZIONE)
     if canale_immat:
         try:
@@ -1583,15 +1785,12 @@ async def on_ready():
             )
             embed_i.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/741/741407.png")
             embed_i.set_footer(text="Motorizzazione Civile • Registro Veicoli")
-
             await canale_immat.send(embed=embed_i, view=ViewPannelloImmatricolazione())
             print("Pannello Immatricolazione Veicoli inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO IMMATRICOLAZIONE: {e}")
-    else:
-        print(f"ERRORE: Canale con ID {ID_CANALE_PANNELLO_IMMATRICOLAZIONE} non trovato o bot senza accesso!")
 
-    # 3. Invio forzato e diretto del pannello Porto d'Armi
+    # 3. Pannello Porto d'Armi
     canale_porto = bot.get_channel(ID_CANALE_PANNELLO_PORTO_ARMI)
     if canale_porto:
         try:
@@ -1611,15 +1810,35 @@ async def on_ready():
             )
             embed_pa.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/1041/1041916.png")
             embed_pa.set_footer(text="Questura • Divisione Polizia Amministrativa", icon_url=bot.user.display_avatar.url)
-
             await canale_porto.send(embed=embed_pa, view=ViewPannelloPortoArmi())
             print("Pannello Porto d'Armi inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO PORTO D'ARMI: {e}")
-    else:
-        print(f"ERRORE: Canale con ID {ID_CANALE_PANNELLO_PORTO_ARMI} non trovato o bot senza accesso!")
 
-    # 4. Sincronizzazione dei comandi slash
+    # 4. Pannello Patente A
+    canale_patente_a = bot.get_channel(ID_CANALE_PANNELLO_PATENTE_A)
+    if canale_patente_a:
+        try:
+            embed_pa_a = discord.Embed(
+                title="🏍️ MOTORIZZAZIONE CIVILE - RICHIESTA PATENTE A",
+                description=(
+                    "Benvenuto nello sportello dedicato al rilascio delle licenze di guida per motocicli.\n\n"
+                    "La **Patente A** ti autorizza alla conduzione di motoveicoli e ciclomotori all'interno della città.\n\n"
+                    "📋 **REQUISITI E ISTRUZIONI:**\n"
+                    "• Clicca sul pulsante sottostante per avviare la richiesta.\n"
+                    "• Compila il modulo con i dati reali del tuo personaggio (**Roleplay**).\n\n"
+                    "⚠️ *Dichiarazioni mendaci comporteranno il rigetto immediato dell'istanza.*"
+                ),
+                color=discord.Color.orange()
+            )
+            embed_pa_a.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/2554/2554932.png")
+            embed_pa_a.set_footer(text="Motorizzazione Civile • Sezione Motocicli", icon_url=bot.user.display_avatar.url)
+            await canale_patente_a.send(embed=embed_pa_a, view=ViewPannelloPatenteA())
+            print("Pannello Patente A inviato con successo!")
+        except Exception as e:
+            print(f"ERRORE INVIO PANNELLO PATENTE A: {e}")
+
+    # Sincronizzazione comandi slash
     try:
         synced = await bot.tree.sync()
         print(f"Sincronizzati {len(synced)} comandi slash.")
