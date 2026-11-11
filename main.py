@@ -2269,7 +2269,7 @@ async def on_ready():
             )
             embed_ass.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/2966/2966327.png")
             embed_ass.set_footer(text="Motorizzazione & Servizi Assicurativi RP", icon_url=bot.user.display_avatar.url)
-            await canale_assicurazione.send(embed=embed_ass, view=ViewPannelloAssicurazione())
+            #await canale_assicurazione.send(embed=embed_ass, view=ViewPannelloAssicurazione())
             print("Pannello Assicurazioni inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO ASSICURAZIONI: {e}")
@@ -2294,7 +2294,7 @@ async def on_ready():
             )
             embed_p.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3202/3202003.png")
             embed_p.set_footer(text="Motorizzazione Civile • Sistema Licenze RP", icon_url=bot.user.display_avatar.url)
-            await canale_patente.send(embed=embed_p, view=ViewPannelloPatenteB())
+            #await canale_patente.send(embed=embed_p, view=ViewPannelloPatenteB())
             print("Pannello Patente B inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO PATENTE B: {e}")
@@ -2316,7 +2316,7 @@ async def on_ready():
             )
             embed_i.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/741/741407.png")
             embed_i.set_footer(text="Motorizzazione Civile • Registro Veicoli")
-            await canale_immat.send(embed=embed_i, view=ViewPannelloImmatricolazione())
+            #await canale_immat.send(embed=embed_i, view=ViewPannelloImmatricolazione())
             print("Pannello Immatricolazione Veicoli inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO IMMATRICOLAZIONE: {e}")
@@ -2341,7 +2341,7 @@ async def on_ready():
             )
             embed_pa.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/1041/1041916.png")
             embed_pa.set_footer(text="Questura • Divisione Polizia Amministrativa", icon_url=bot.user.display_avatar.url)
-            await canale_porto.send(embed=embed_pa, view=ViewPannelloPortoArmi())
+            #await canale_porto.send(embed=embed_pa, view=ViewPannelloPortoArmi())
             print("Pannello Porto d'Armi inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO PORTO D'ARMI: {e}")
@@ -2364,7 +2364,7 @@ async def on_ready():
             )
             embed_pa_a.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/2554/2554932.png")
             embed_pa_a.set_footer(text="Motorizzazione Civile • Sezione Motocicli", icon_url=bot.user.display_avatar.url)
-            await canale_patente_a.send(embed=embed_pa_a, view=ViewPannelloPatenteA())
+            #await canale_patente_a.send(embed=embed_pa_a, view=ViewPannelloPatenteA())
             print("Pannello Patente A inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO PATENTE A: {e}")
@@ -2394,7 +2394,7 @@ async def on_ready():
             )
             embed_pa_c.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/754/754859.png")
             embed_pa_c.set_footer(text="Motorizzazione Civile • Sezione Veicoli Pesanti", icon_url=bot.user.display_avatar.url)
-            await canale_patente_c.send(embed=embed_pa_c, view=ViewPannelloPatenteC())
+            #await canale_patente_c.send(embed=embed_pa_c, view=ViewPannelloPatenteC())
             print("Pannello Patente C inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO PATENTE C: {e}")
@@ -2417,7 +2417,7 @@ async def on_ready():
             )
             embed_pa_d.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3067/3067417.png")
             embed_pa_d.set_footer(text="Motorizzazione Civile • Sezione Autobus", icon_url=bot.user.display_avatar.url)
-            await canale_patente_d.send(embed=embed_pa_d, view=ViewPannelloPatenteD())
+            #await canale_patente_d.send(embed=embed_pa_d, view=ViewPannelloPatenteD())
             print("Pannello Patente D inviato con successo!")
         except Exception as e:
             print(f"ERRORE INVIO PANNELLO PATENTE D: {e}")
