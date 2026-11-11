@@ -96,6 +96,246 @@ ID_CANALE_ANNUNCI_LIFARDO = 1569747095173333002
 ID_RUOLO_STAFF_LIFARDO = 1569496579218341958
 ID_RUOLO_MEMBRO_LIFARDO = 1569496594892595210
 
+# --- ID SISTEMA PATENTE B ---
+ID_CANALE_PANNELLO_PATENTE = 1569832234800914494
+ID_CANALE_ACCETTAZIONI_PATENTI = 1570086995496009799
+ID_FORUM_PATENTI_ACCETTATE = 1570087208558272633
+ID_RUOLO_PATENTE_B = 1569837307433984141
+
+
+
+
+# ==========================================
+# 3. MODAL & VIEW SISTEMA PATENTI
+# ==========================================
+
+# Modulo invio motivazione in caso di Rifiuto
+class ModalRifiutoPatente(discord.ui.Modal, title="Motivazione Rifiuto Patente B"):
+    motivazione = discord.ui.TextInput(
+        label="Motivo del rifiuto",
+        style=discord.TextStyle.paragraph,
+        placeholder="Es. Documentazione mancante, requisiti non soddisfatti...",
+        required=True,
+        max_length=500
+    )
+
+    def __init__(self, target_user: discord.Member, nome_rp: str, messaggio_staff: discord.Message):
+        super().__init__()
+        self.target_user = target_user
+        self.nome_rp = nome_rp
+        self.messaggio_staff = messaggio_staff
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        # 1. Modifica embed per lo staff
+        embed_staff = self.messaggio_staff.embeds[0]
+        embed_staff.color = discord.Color.red()
+        embed_staff.set_footer(text=f"❌ RIFIUTATO da {interaction.user.display_name}")
+        embed_staff.add_field(name="📌 Motivazione Rifiuto", value=self.motivazione.value, inline=False)
+        await self.messaggio_staff.edit(embed=embed_staff, view=None)
+
+        # 2. Invio DM all'utente
+        try:
+            embed_dm = discord.Embed(
+                title="❌ Esito Richiesta Patente B",
+                description=f"Ciao **{self.nome_rp}**, la tua richiesta per la **Patente B** è stata **RIFIUTATA**.",
+                color=discord.Color.red()
+            )
+            embed_dm.add_field(name="📝 Motivazione", value=self.motivazione.value, inline=False)
+            embed_dm.set_footer(text="Motorizzazione Civile RP")
+            await self.target_user.send(embed=embed_dm)
+        except discord.Forbidden:
+            pass
+
+        await interaction.followup.send(f"❌ Richiesta di {self.target_user.mention} rifiutata con successo.", ephemeral=True)
+
+
+# Pulsanti Gestione Staff (Accetta / Rifiuta)
+class ViewGestioneStaffPatente(discord.ui.View):
+    def __init__(self, target_user_id: int, nome_rp: str, eta_rp: str):
+        super().__init__(timeout=None)
+        self.target_user_id = target_user_id
+        self.nome_rp = nome_rp
+        self.eta_rp = eta_rp
+
+    @discord.ui.button(label="Accetta", style=discord.ButtonStyle.green, emoji="✅", custom_id="btn_accetta_patente_b")
+    async def accetta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        # Assegnazione Ruolo Patente B
+        ruolo_patente = guild.get_role(ID_RUOLO_PATENTE_B)
+        if member and ruolo_patente:
+            await member.add_roles(ruolo_patente)
+
+        # 1. Modifica embed nel canale staff
+        embed_staff = interaction.message.embeds[0]
+        embed_staff.color = discord.Color.green()
+        embed_staff.set_footer(text=f"✅ ACCETTATO da {interaction.user.display_name}")
+        await interaction.message.edit(embed=embed_staff, view=None)
+
+        # 2. Creazione del post nel Forum Patenti Accettate
+        forum_canale = guild.get_channel(ID_FORUM_PATENTI_ACCETTATE)
+        if forum_canale and isinstance(forum_canale, discord.ForumChannel):
+            embed_forum = discord.Embed(
+                title=f"🚗 SCHEDA PATENTE B - {self.nome_rp.upper()}",
+                description="Documento di guida accreditato ed emesso dalla Motorizzazione Civile.",
+                color=discord.Color.blue()
+            )
+            embed_forum.add_field(name="👤 Titolare (RP)", value=self.nome_rp, inline=True)
+            embed_forum.add_field(name="🎂 Età RP", value=self.eta_rp, inline=True)
+            embed_forum.add_field(name="🆔 Utente Discord", value=f"<@{self.target_user_id}>", inline=False)
+            embed_forum.add_field(name="📜 Stato Licenza", value="🟢 **ATTIVA / VALIDA**", inline=False)
+            embed_forum.set_footer(text=f"Approvata da: {interaction.user.display_name}")
+
+            await forum_canale.create_thread(
+                name=f"📄 Patente B - {self.nome_rp}",
+                embed=embed_forum
+            )
+
+        # 3. Invio DM all'utente
+        if member:
+            try:
+                embed_dm = discord.Embed(
+                    title="🎉 Congratulazioni! Patente B Approvata",
+                    description=f"Ciao **{self.nome_rp}**, la tua richiesta per la **Patente B** è stata **ACCETTATA**!\nTi è stato assegnato il ruolo ufficiale ed è stata creata la tua scheda registro nel Forum.",
+                    color=discord.Color.green()
+                )
+                embed_dm.set_footer(text="Motorizzazione Civile RP")
+                await member.send(embed=embed_dm)
+            except discord.Forbidden:
+                pass
+
+        await interaction.followup.send(f"✅ Patente B di <@{self.target_user_id}> accettata con successo!", ephemeral=True)
+
+    @discord.ui.button(label="Rifiuta", style=discord.ButtonStyle.red, emoji="✖️", custom_id="btn_rifiuta_patente_b")
+    async def rifiuta(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        member = guild.get_member(self.target_user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(self.target_user_id)
+            except discord.NotFound:
+                member = None
+
+        if not member:
+            await interaction.response.send_message("❌ Utente non trovato nel server.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(ModalRifiutoPatente(target_user=member, nome_rp=self.nome_rp, messaggio_staff=interaction.message))
+
+
+# Modal che l'utente compila quando richiede la patente
+class ModalRichiestaPatenteB(discord.ui.Modal, title="Modulo Richiesta Patente B"):
+    nome_rp = discord.ui.TextInput(
+        label="Nome e Cognome RP",
+        placeholder="Es. Mario Rossi",
+        required=True,
+        max_length=50
+    )
+    eta_rp = discord.ui.TextInput(
+        label="Età RP",
+        placeholder="Es. 25",
+        required=True,
+        max_length=3
+    )
+    motivo = discord.ui.TextInput(
+        label="Motivazione richiesta",
+        style=discord.TextStyle.paragraph,
+        placeholder="Spiega brevemente perché ti serve la Patente B...",
+        required=True,
+        max_length=300
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        canale_accettazioni = interaction.guild.get_channel(ID_CANALE_ACCETTAZIONI_PATENTI)
+        if not canale_accettazioni:
+            await interaction.followup.send("❌ Errore di configurazione: canale accettazioni non trovato.", ephemeral=True)
+            return
+
+        embed_staff = discord.Embed(
+            title="📑 NUOVA RICHIESTA PATENTE B",
+            color=discord.Color.gold()
+        )
+        embed_staff.add_field(name="👤 Utente Discord", value=interaction.user.mention, inline=True)
+        embed_staff.add_field(name="📝 Nome e Cognome RP", value=self.nome_rp.value, inline=True)
+        embed_staff.add_field(name="🎂 Età RP", value=self.eta_rp.value, inline=True)
+        embed_staff.add_field(name="📄 Motivazione", value=self.motivo.value, inline=False)
+        embed_staff.set_footer(text="Usa i pulsanti sottostanti per gestire la richiesta.")
+
+        view = ViewGestioneStaffPatente(
+            target_user_id=interaction.user.id,
+            nome_rp=self.nome_rp.value,
+            eta_rp=self.eta_rp.value
+        )
+
+        await canale_accettazioni.send(embed=embed_staff, view=view)
+        await interaction.followup.send("✅ La tua richiesta per la **Patente B** è stata inviata allo staff con successo!", ephemeral=True)
+
+
+# View con il pulsante principale
+class ViewPannelloPatenteB(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Richiedi Patente B", style=discord.ButtonStyle.primary, emoji="🚗", custom_id="btn_richiedi_patente_b")
+    async def richiedi_patente(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ModalRichiestaPatenteB())
+
+
+# ==========================================
+# 4. EVENTO ON_READY (INVIO AUTOMATICO)
+# ==========================================
+@bot.event
+async def on_ready():
+    print(f"Bot online come {bot.user}")
+    bot.add_view(ViewPannelloPatenteB())
+
+    # Invio automatico del pannello nel canale configurato
+    canale = bot.get_channel(ID_CANALE_PANNELLO_PATENTE)
+    if canale:
+        # Controlla se il bot ha già inviato il pannello per evitare doppioni
+        async for message in canale.history(limit=20):
+            if message.author == bot.user and message.embeds and "MOTORIZZAZIONE CIVILE" in message.embeds[0].title:
+                print("Pannello Patente B già presente nel canale.")
+                break
+        else:
+            embed = discord.Embed(
+                title="🚘 MOTORIZZAZIONE CIVILE - RICHIESTA PATENTE B",
+                description=(
+                    "Benvenuto nello sportello digitale della **Motorizzazione Civile**.\n\n"
+                    "La **Patente B** ti autorizza alla guida di autoveicoli, autovetture private e mezzi di trasporto leggeri "
+                    "all'interno del territorio di gioco.\n\n"
+                    "📋 **REQUISITI E ISTRUZIONI:**\n"
+                    "• Compila il modulo cliccando sul pulsante sottostante.\n"
+                    "• Inserisci i dati della tua identità **Roleplay** con la massima accuratezza.\n"
+                    "• Le richieste vengono revisionate in tempo reale dagli esaminatori preposti.\n\n"
+                    "⚠️ *Eventuali dichiarazioni mendaci comportano il rigetto istantaneo della pratica.*"
+                ),
+                color=discord.Color.blue()
+            )
+            embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3202/3202003.png")
+            embed.set_footer(text="Motorizzazione Civile • Sistema Licenze RP", icon_url=bot.user.display_avatar.url)
+
+            await canale.send(embed=embed, view=ViewPannelloPatenteB())
+            print("Pannello Patente B inviato automaticamente nel canale!")
+
+    try:
+        synced = await bot.tree.sync()
+        print(f"Sincronizzati {len(synced)} comandi slash.")
+    except Exception as e:
+        print(f"Errore sincronizzazione comandi: {e}")
+
 
 # ==========================================
 # 3. SISTEMA CITTADINANZA
