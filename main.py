@@ -2191,7 +2191,7 @@ def solo_ruolo_autorizzato():
 # COMANDI VOCALI CON RESTRIZIONE DI RUOLO
 # ==========================================
 
-@bot.tree.command(name="vocalebot-roleplay", description="Fa entrare il bot nel canale vocale predefinito")
+@bot.tree.command(name="vocale", description="Fa entrare il bot nel canale vocale predefinito")
 @solo_ruolo_autorizzato()
 async def vocale(interaction: discord.Interaction):
     guild = interaction.guild
