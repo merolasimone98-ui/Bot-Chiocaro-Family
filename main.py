@@ -2216,6 +2216,14 @@ async def vocale(interaction: discord.Interaction):
     except Exception as e:
         await interaction.response.send_message(f"❌ Impossibile connettersi al canale vocale: `{e}`", ephemeral=True)
 
+@bot.event
+async def on_voice_state_update(member, before, after):
+    # Controlla se il membro che ha cambiato stato è il bot stesso
+    if member.id == bot.user.id:
+        # Se il bot si è disconnesso da un canale (era in 'before.channel' e ora non è più in nessuna vocale)
+        if before.channel is not None and after.channel is None:
+            if member.guild.voice_client:
+                await member.guild.voice_client.disconnect()
 # ==========================================
 # 9. AVVIO APPLICAZIONE
 # ==========================================
