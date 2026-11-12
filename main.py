@@ -73,7 +73,7 @@ ID_CANALE_STAFF = 1569720656541515866
 ID_CANALE_FORUM = 1569721095345405993
 ID_TAG_CITTADINANZA = 1569724498385571921
 ID_RUOLO_AUTORIZZATO_TUMORE = 1569737774733721650
-ID_CANALE_VOCALE_DESTINAZIONE = 1569502181080432731
+ID_CANALE_VOCALE_DESTINAZIONE = 1570409359270477985
 
 # ID FAMIGLIA CHIOCARO
 ID_CANALE_PANNELLO_CHIOCARO = 1569740451861504060
@@ -2191,7 +2191,7 @@ def solo_ruolo_autorizzato():
 # COMANDI VOCALI CON RESTRIZIONE DI RUOLO
 # ==========================================
 
-@bot.tree.command(name="vocale", description="Fa entrare il bot nel canale vocale predefinito")
+@bot.tree.command(name="vocalebot-roleplay", description="Fa entrare il bot nel canale vocale predefinito")
 @solo_ruolo_autorizzato()
 async def vocale(interaction: discord.Interaction):
     guild = interaction.guild
@@ -2215,19 +2215,6 @@ async def vocale(interaction: discord.Interaction):
         await interaction.response.send_message(f"🔊 **Bot connesso con successo al canale vocale:** {canale_vocale.mention}!", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Impossibile connettersi al canale vocale: `{e}`", ephemeral=True)
-
-@bot.tree.command(name="esci", description="Disconnette il bot dal canale vocale")
-@solo_ruolo_autorizzato()
-async def esci(interaction: discord.Interaction):
-    guild = interaction.guild
-    voice_client = guild.voice_client
-
-    if voice_client is not None:
-        await voice_client.disconnect()
-        await interaction.response.send_message("🔇 **Bot disconnesso dal canale vocale.**", ephemeral=True)
-    else:
-        await interaction.response.send_message("❌ Il bot non è attualmente connesso a nessun canale vocale.", ephemeral=True)
-
 
 # ==========================================
 # 9. AVVIO APPLICAZIONE
